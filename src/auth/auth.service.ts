@@ -1,5 +1,5 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException,ConflictException} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -50,7 +50,11 @@ export class AuthService {
   // Cek jika user sudah ada
   const existingUser = await this.userService.findByUsername(username);
   if (existingUser) {
-    throw new Error('Username sudah digunakan');
+    throw new ConflictException({
+    statusCode: 409,
+    message: 'Username sudah digunakan',
+    error: 'Conflict',
+  });
   }
 
   // Hash password

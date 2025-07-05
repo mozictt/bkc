@@ -56,3 +56,48 @@ Content-Type: application/json
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTY0NywiZXhwIjoxNzUyMzA2NDQ3fQ.ogoAVkUk-ekbFtIDsyYGOJEQm-XRHnCywg1r5fmQLus"
 }
 
+
+
+### tambah barang
+POST http://localhost:3000/barang
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Content-Type: application/json
+
+{
+  "nama": "Laptop Lenovo",
+  "harga": 10000000,
+  "stok": 15,
+  "deskripsi": "Laptop untuk kerja"
+}
+
+### get data barang barang
+GET http://localhost:3000/barang/3
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Content-Type: application/json
+
+
+
+### edit barang
+PUT http://localhost:3000/barang/4
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Content-Type: application/json
+
+{
+  "nama": "Laptop yoga",
+  "harga": 10000000,
+  "stok": 15,
+  "deskripsi": "Laptop untuk kerja"
+}
+
+
+### edit barang
+DELETE http://localhost:3000/barang/2
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Content-Type: application/json
+ 
+
+
+### get all data barang
+GET http://localhost:3000/barang?page=1&limit=5
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Content-Type: application/json

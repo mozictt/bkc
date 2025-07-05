@@ -5,7 +5,9 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { User } from './users/user.entity';
 import { Company } from './company/company.entity';
+import { Barang } from './barang/barang.entity';
 import { CompanyModule } from './company/company.module';
+import { BarangModule } from './barang/barang.module';
 
 
 @Module({
@@ -17,12 +19,13 @@ import { CompanyModule } from './company/company.module';
       username: 'root',
       password: 'root',
       database: 'app',
-      entities: [User,Company],
+      entities: [User,Company,Barang],
       synchronize: true,
     }),
     AuthModule,
     UsersModule,
     CompanyModule,
+    BarangModule,
   ],
 })
 export class AppModule {}
