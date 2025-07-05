@@ -5,39 +5,39 @@ import { Company } from './company.entity';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 
-
 @Injectable()
 export class CompanyService {
-    constructor(
-        @InjectRepository(Company)
-        private companyRepo: Repository<Company>,
-    ) { }
+  constructor(
+    @InjectRepository(Company)
+    private companyRepo: Repository<Company>,
+  ) {}
 
-    async getProfile(): Promise<Company> {
-        const company = await this.companyRepo.findOne({ where: { id: 1 } });
+  async getProfile(): Promise<Company> {
+    const company = await this.companyRepo.findOne({ where: { id: 1 } });
 
-        if (!company) {
-            throw new NotFoundException('Data perusahaan tidak ditemukan');
-        }
-
-        return company;
+    if (!company) {
+      throw new NotFoundException('Data perusahaan tidak ditemukan');
     }
 
-    async updateProfile(id: number, data: Partial<Company>): Promise<Company> {
-        const existing = await this.companyRepo.findOne({ where: { id } });
+    return company;
+  }
 
-        if (!existing) {
-            throw new NotFoundException(`Perusahaan dengan ID ${id} tidak ditemukan`);
-        }
+  async updateProfile(id: number, data: Partial<Company>): Promise<Company> {
+    const existing = await this.companyRepo.findOne({ where: { id } });
 
-        await this.companyRepo.update(id, data);
-
-        const updated = await this.companyRepo.findOne({ where: { id } });
-        if (!updated) {
-            throw new NotFoundException(`Data perusahaan gagal dimuat setelah update`);
-        }
-
-        return updated;
+    if (!existing) {
+      throw new NotFoundException(`Perusahaan dengan ID ${id} tidak ditemukan`);
     }
 
+    await this.companyRepo.update(id, data);
+
+    const updated = await this.companyRepo.findOne({ where: { id } });
+    if (!updated) {
+      throw new NotFoundException(
+        `Data perusahaan gagal dimuat setelah update`,
+      );
+    }
+
+    return updated;
+  }
 }

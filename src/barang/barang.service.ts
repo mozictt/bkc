@@ -10,24 +10,23 @@ export class BarangService {
     private readonly barangRepo: Repository<Barang>,
   ) {}
 
-//   async findAll(): Promise<Barang[]> {
-//     return this.barangRepo.find();
-//   }
-async findAll(page = 1, limit = 10): Promise<any> {
-  const [data, total] = await this.barangRepo.findAndCount({
-    skip: (page - 1) * limit,
-    take: limit,
-  });
+  //   async findAll(): Promise<Barang[]> {
+  //     return this.barangRepo.find();
+  //   }
+  async findAll(page = 1, limit = 10): Promise<any> {
+    const [data, total] = await this.barangRepo.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+    });
 
-  return {
-    success: true,
-    currentPage: page,
-    totalItems: total,
-    totalPages: Math.ceil(total / limit),
-    data,
-  };
-}
-
+    return {
+      success: true,
+      currentPage: page,
+      totalItems: total,
+      totalPages: Math.ceil(total / limit),
+      data,
+    };
+  }
 
   async findOne(id: number): Promise<Barang> {
     const barang = await this.barangRepo.findOne({ where: { id } });

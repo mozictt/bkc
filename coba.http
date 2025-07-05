@@ -1,8 +1,18 @@
 
 
+### login
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password123"
+} 
+
+
 ### edit company
 PUT http://localhost:3000/company/1
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
 
 {
@@ -11,11 +21,11 @@ Content-Type: application/json
 
 ### registrasi user
 POST http://localhost:3000/auth/register
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
 
 {
-  "username": "admin3",
+  "username": "admin",
   "password": "password123"
 } 
 
@@ -33,15 +43,6 @@ Content-Type: application/json
 
 
 
-### login
-POST http://localhost:3000/auth/login
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjoxLCJpYXQiOjE3NTE2OTc5ODEsImV4cCI6MTc1MTcwMTU4MX0.sRDU-VyU-2Y5KPLSVg0JX4yytiZll10vhOUojVSvTpI
-Content-Type: application/json
-
-{
-  "username": "pegawai",
-  "password": "password123"
-} 
 
 
 
@@ -60,7 +61,7 @@ Content-Type: application/json
 
 ### tambah barang
 POST http://localhost:3000/barang
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
 
 {
@@ -72,14 +73,14 @@ Content-Type: application/json
 
 ### get data barang barang
 GET http://localhost:3000/barang/3
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
 
 
 
 ### edit barang
 PUT http://localhost:3000/barang/4
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
 
 {
@@ -92,12 +93,12 @@ Content-Type: application/json
 
 ### edit barang
 DELETE http://localhost:3000/barang/2
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json
  
 
 
 ### get all data barang
 GET http://localhost:3000/barang?page=1&limit=5
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTc0OSwiZXhwIjoxNzUxNzA1MzQ5fQ.C6Mdfh_KPW_eciLU9pZ8yCUp0dJS-YC-VPEjkh6wgCI
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
 Content-Type: application/json

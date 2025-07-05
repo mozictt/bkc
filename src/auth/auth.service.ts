@@ -1,5 +1,9 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException,ConflictException} from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -14,7 +18,7 @@ export class AuthService {
 
   async validateUser(username: string, password: string) {
     const user = await this.userService.findByUsername(username);
-    if (user && await bcrypt.compare(password, user.password)) {
+    if (user && (await bcrypt.compare(password, user.password))) {
       return user;
     }
     return null;
@@ -45,24 +49,24 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-  const { username, password } = registerDto;
+    const { username, password } = registerDto;
+    // Cek jika user sudah ada
+    const existingUser = await this.userService.findByUsername(username);
+    if (existingUser) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: 'Username sudah digunakan',
+        error: 'Conflict',
+      });
+    }
 
-  // Cek jika user sudah ada
-  const existingUser = await this.userService.findByUsername(username);
-  if (existingUser) {
-    throw new ConflictException({
-    statusCode: 409,
-    message: 'Username sudah digunakan',
-    error: 'Conflict',
-  });
+    // Hash password
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Simpan user baru
+    console.log(username);
+    const user = await this.userService.create(username, hashedPassword);
+    return { message: 'Registrasi berhasil', userId: user.id };
   }
-
-  // Hash password
-  const salt = await bcrypt.genSalt();
-  const hashedPassword = await bcrypt.hash(password, salt);
-
-  // Simpan user baru
-  const user = await this.userService.create(username, hashedPassword);
-  return { message: 'Registrasi berhasil', userId: user.id };
-}
 }

@@ -6,25 +6,25 @@ import { User } from './user.entity';
 
 @Injectable()
 export class UsersService {
-    constructor(
-        @InjectRepository(User)
-        private userRepo: Repository<User>,
-    ) { }
+  constructor(
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
+  ) {}
 
-    async findByUsername(username: string) {
-        return this.userRepo.findOne({ where: { username } });
-    }
+  async findByUsername(username: string) {
+    return this.userRepo.findOne({ where: { username } });
+  }
 
-    async findById(id: number) {
-        return this.userRepo.findOne({ where: { id } });
-    }
+  async findById(id: number) {
+    return this.userRepo.findOne({ where: { id } });
+  }
 
-    async updateRefreshToken(userId: number, token: string) {
-        await this.userRepo.update(userId, { refreshToken: token });
-    }
+  async updateRefreshToken(userId: number, token: string) {
+    await this.userRepo.update(userId, { refreshToken: token });
+  }
 
-    async create(username: string, passwordHash: string) {
-        const user = this.userRepo.create({ username, password: passwordHash });
-        return this.userRepo.save(user);
-    } 
+  async create(username: string, passwordHash: string) {
+    const user = this.userRepo.create({ username, password: passwordHash });
+    return this.userRepo.save(user);
+  }
 }

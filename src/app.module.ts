@@ -9,7 +9,6 @@ import { Barang } from './barang/barang.entity';
 import { CompanyModule } from './company/company.module';
 import { BarangModule } from './barang/barang.module';
 
-
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -19,7 +18,7 @@ import { BarangModule } from './barang/barang.module';
       username: 'root',
       password: 'root',
       database: 'app',
-      entities: [User,Company,Barang],
+      entities: [User, Company, Barang],
       synchronize: true,
     }),
     AuthModule,

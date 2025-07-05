@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsOptional,
+  Min,
+} from 'class-validator';
 
 export class CreateBarangDto {
   @IsNotEmpty()
