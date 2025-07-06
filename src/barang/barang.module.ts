@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Barang } from './barang.entity';
+import { Barang } from '../entities/barang.entity';
 import { BarangService } from './barang.service';
 import { BarangController } from './barang.controller';
 

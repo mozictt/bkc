@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { BarangService } from './barang.service';
-import { Barang } from './barang.entity';
+import { Barang } from '../entities/barang.entity';
 import { CreateBarangDto } from './dto/create-barang.dto';
 import { UpdateBarangDto } from './dto/update-barang.dto';
 import { AuthGuard } from '@nestjs/passport';

@@ -1,7 +1,7 @@
 // src/company/company.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Company } from './company.entity';
+import { Company } from '../entities/company.entity';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 

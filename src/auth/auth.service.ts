@@ -16,22 +16,55 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  // async validateUser(username: string, password: string) {
+  //   const user = await this.userService.findByUsername(username);
+  //   if (user && (await bcrypt.compare(password, user.password))) {
+  //     return user;
+  //   }
+  //   return null;
+  // }
   async validateUser(username: string, password: string) {
     const user = await this.userService.findByUsername(username);
+
     if (user && (await bcrypt.compare(password, user.password))) {
-      return user;
+      return user; // sudah termasuk role & menus
     }
+
     return null;
   }
 
+  // async login(user: any) {
+  //   const payload = { username: user.username, sub: user.id };
+  //   const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+  //   const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+  //   await this.userService.updateRefreshToken(user.id, refreshToken);
+
+  //   return { accessToken, refreshToken };
+  // }
   async login(user: any) {
-    const payload = { username: user.username, sub: user.id };
+    const payload = {
+      sub: user.id,
+      username: user.username,
+      role: user.role?.name,
+      menus: user.role?.menus?.map((menu) => menu.url).filter(Boolean) || [],
+    };
+
     const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     await this.userService.updateRefreshToken(user.id, refreshToken);
 
-    return { accessToken, refreshToken };
+    return {
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role?.name,
+        menus: user.role?.menus?.map((m) => m.url).filter(Boolean) || [],
+      },
+      accessToken,
+      refreshToken,
+    };
   }
 
   async refresh(userId: number, token: string) {

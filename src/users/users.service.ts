@@ -2,7 +2,7 @@
 import { Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from './user.entity';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class UsersService {
@@ -11,8 +11,14 @@ export class UsersService {
     private userRepo: Repository<User>,
   ) {}
 
-  async findByUsername(username: string) {
-    return this.userRepo.findOne({ where: { username } });
+  // async findByUsername(username: string) {
+  //   return this.userRepo.findOne({ where: { username } });
+  // }
+  findByUsername(username: string) {
+    return this.userRepo.findOne({
+      where: { username },
+      relations: ['role', 'role.menus'], // ⬅️ ini penting!
+    });
   }
 
   async findById(id: number) {
