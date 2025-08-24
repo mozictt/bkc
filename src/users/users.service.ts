@@ -29,8 +29,13 @@ export class UsersService {
     await this.userRepo.update(userId, { refreshToken: token });
   }
 
-  async create(username: string, passwordHash: string) {
-    const user = this.userRepo.create({ username, password: passwordHash });
+  async create(username: string, passwordHash: string,id_role: number) { 
+    const user = this.userRepo.create(
+      { 
+        username, 
+        password: passwordHash,
+         role: { id: id_role }
+      });
     return this.userRepo.save(user);
   }
 }

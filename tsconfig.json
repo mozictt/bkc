@@ -12,7 +12,9 @@
     // "baseUrl": "./",
     "baseUrl": "./src",
     "paths": {
-      "@entities/*": ["entities/*"]
+      "@entities/*": ["entities/*"],
+      "@modules/*": ["modules/*"],
+      "@auth/*": ["auth/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

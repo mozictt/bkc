@@ -4,7 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Company } from './entities/company.entity';
 import { Barang } from './entities/barang.entity';
-import { AuthModule } from './auth/auth.module';
+import { AuthModule } from '@auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompanyModule } from './company/company.module';
 import { BarangModule } from './barang/barang.module';

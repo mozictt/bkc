@@ -2,7 +2,7 @@
 /dist
 /node_modules
 /build
-/cek_api
+# /cek_api
 
 # Logs
 logs

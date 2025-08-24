@@ -1,0 +1,55 @@
+
+
+### get all data menu
+GET http://localhost:4000/menus
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+
+
+### get all data menu by role
+GET http://localhost:4000/menus/role/1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+
+
+
+
+### get all data by id
+GET http://localhost:4000/menus/3
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+
+
+
+### Tambah menu
+POST http://localhost:4000/menus
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+
+{
+  "name": "Settings",
+  "url": "/settings",
+  "icon": "gearss",
+  "order_no": 4,
+  "is_active": true,
+  "parent": 2
+}
+
+
+### edit menu
+PUT http://localhost:4000/menus/3
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+
+{
+  "name": "Postss",
+  "order_no": 2,
+  "is_active": false
+}
+
+
+### DELETE MENU
+DELETE http://localhost:4000/menus/9
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjo1LCJpYXQiOjE3NTE3MDg1NjEsImV4cCI6MTc1MTcxMjE2MX0.6rQmW7Q5FD76gW3Bs4ZkRhhN1HG8U8X1A_d8G_nt_Xs
+Content-Type: application/json
+

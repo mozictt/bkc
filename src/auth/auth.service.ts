@@ -8,12 +8,15 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { ConfigService } from '@nestjs/config';
+import { exit } from 'process';
 
 @Injectable()
 export class AuthService {
   constructor(
     private userService: UsersService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   // async validateUser(username: string, password: string) {
@@ -50,8 +53,13 @@ export class AuthService {
       menus: user.role?.menus?.map((menu) => menu.url).filter(Boolean) || [],
     };
 
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
+    });
 
     await this.userService.updateRefreshToken(user.id, refreshToken);
 
@@ -82,7 +90,9 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const { username, password } = registerDto;
+    //  console.log('registerDto:', registerDto); // tampilkan isi registerDto
+    // return;
+    const { username, password, id_role } = registerDto;
     // Cek jika user sudah ada
     const existingUser = await this.userService.findByUsername(username);
     if (existingUser) {
@@ -99,7 +109,11 @@ export class AuthService {
 
     // Simpan user baru
     console.log(username);
-    const user = await this.userService.create(username, hashedPassword);
+    const user = await this.userService.create(
+      username,
+      hashedPassword,
+      id_role
+    );
     return { message: 'Registrasi berhasil', userId: user.id };
   }
 }
