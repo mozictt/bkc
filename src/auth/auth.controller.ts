@@ -9,12 +9,13 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { AuthGuard } from '@nestjs/passport';
+// import { AuthGuard } from '@nestjs/passport';
+import { Public } from '@auth/public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
-
+  @Public()
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const user = await this.authService.validateUser(
@@ -26,7 +27,7 @@ export class AuthController {
     }
     return this.authService.login(user);
   }
-
+  
   @Post('refresh')
   async refresh(@Body() body: { userId: number; refreshToken: string }) {
     return this.authService.refresh(body.userId, body.refreshToken);

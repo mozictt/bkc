@@ -77,9 +77,10 @@ export class AuthService {
 
   async refresh(userId: number, token: string) {
     const user = await this.userService.findById(userId);
+      console.log('TOKEN DARI DB     :', user.refreshToken);
     if (!user || user.refreshToken !== token) {
       throw new UnauthorizedException();
-    }
+    } 
 
     const payload = { username: user.username, sub: user.id };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });

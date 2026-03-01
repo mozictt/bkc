@@ -1,0 +1,36 @@
+{
+  // 🚨 MATIKAN SEMUA TYPE ANALYSIS
+  "typescript.validate.enable": false,
+  "typescript.tsserver.enable": false,
+  "typescript.suggest.enabled": false,
+  "typescript.referencesCodeLens.enabled": false,
+  "typescript.implementationsCodeLens.enabled": false,
+
+  // 🚨 STOP AUTO TYPE DOWNLOAD
+  "typescript.disableAutomaticTypeAcquisition": true,
+
+  // 🚨 JANGAN SCAN PROJECT
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.git": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.git/**": true
+  },
+  {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  // 🚨 MATIKAN SEMUA SUGGESTION BERAT
+  "editor.quickSuggestions": {
+    "comments": "off",
+    "strings": "off",
+    "other": "off"
+  },
+  "editor.parameterHints.enabled": false,
+  "editor.inlineSuggest.enabled": false
+}

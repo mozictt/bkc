@@ -11,6 +11,8 @@ import { BarangModule } from './barang/barang.module';
 import { Role } from '@entities/role.entity';
 import { Menu } from '@entities/menu.entity';
 import { MenuModule } from './menu/menu.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from '@auth/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -38,6 +40,12 @@ import { MenuModule } from './menu/menu.module';
     CompanyModule,
     BarangModule,
     MenuModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}

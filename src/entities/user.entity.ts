@@ -23,6 +23,6 @@ export class User {
   @JoinColumn({ name: 'role_id' }) // FK: role_id
   role: Role;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true})
   refreshToken: string;
 }

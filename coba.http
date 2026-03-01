@@ -1,15 +1,37 @@
 
 @baseurl= http://localhost:4000/
-@token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjcsInVzZXJuYW1lIjoiYWRtaW4zIiwicm9sZSI6ImVkaXRvciIsIm1lbnVzIjpbIi9kYXNoYm9hcmQiLCIvcG9zdHMvY3JlYXRlIiwiL3Bvc3RzIl0sImlhdCI6MTc1NjAyMDAzOSwiZXhwIjoxNzU2MDIwMDc1fQ.bPG6cTksQg5S76TnIqqAam4_okjg6EIAcU8CVzaH9eg
+@token=$2b$10$6YNVD9zlVoCUQ9jUbmW/PuGxFY.VujrZnZq0NboGQql7/tdIoeRti
+@refreshtoken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgsInVzZXJuYW1lIjoiY29iYSIsInJvbGUiOiJlZGl0b3IiLCJtZW51cyI6WyIvZGFzaGJvYXJkIiwiL3Bvc3RzL2NyZWF0ZSIsIi9wb3N0cyJdLCJpYXQiOjE3NzE3MzcwMjAsImV4cCI6MTc3MTgyMzQyMH0.I46dxxwkHUfa5zTnMub-9WzFiH1WrNjCrZozV03FCjk
 ### login
 POST {{baseurl}}auth/login
 Content-Type: application/json
 
 {
-  "username": "admin3",
+  "username": "coba",
   "password": "password123"
 } 
 
+### refresh token
+POST {{baseurl}}auth/refresh
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": 8,
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgsInVzZXJuYW1lIjoiY29iYSIsInJvbGUiOiJlZGl0b3IiLCJtZW51cyI6WyIvZGFzaGJvYXJkIiwiL3Bvc3RzL2NyZWF0ZSIsIi9wb3N0cyJdLCJpYXQiOjE3NzE3MzcyNTQsImV4cCI6MTc3MTgyMzY1NH0.orWmXf1ahmRgLTdQfMYyt66GNeZo0GF2aAZGKWeXMIA"
+}
+
+
+### registrasi user
+POST {{baseurl}}auth/register
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "coba3348",
+  "password": "password123",
+  "id_role": 2 
+} 
 
 ### get all data barang
 GET {{baseurl}}barang?page=1&limit=5
@@ -26,21 +48,11 @@ Content-Type: application/json
   "address": "Jl. Baru No. 999"
 }
 
+
+
 ### registrasi user
 POST {{baseurl}}auth/register
 Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "username": "admin3",
-  "password": "password123",
-  "id_role": 2 
-} 
-
-
-### registrasi user
-POST {{baseurl}}auth/register
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjoxLCJpYXQiOjE3NTE2OTc5ODEsImV4cCI6MTc1MTcwMTU4MX0.sRDU-VyU-2Y5KPLSVg0JX4yytiZll10vhOUojVSvTpI
 Content-Type: application/json
 
 {
@@ -55,15 +67,6 @@ Content-Type: application/json
 
 
 
-### registrasi user
-POST {{baseurl}}auth/refresh
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjoxLCJpYXQiOjE3NTE2OTc5ODEsImV4cCI6MTc1MTcwMTU4MX0.sRDU-VyU-2Y5KPLSVg0JX4yytiZll10vhOUojVSvTpI
-Content-Type: application/json
-
-{
-  "userId": 2,
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InBlZ2F3YWkiLCJzdWIiOjIsImlhdCI6MTc1MTcwMTY0NywiZXhwIjoxNzUyMzA2NDQ3fQ.ogoAVkUk-ekbFtIDsyYGOJEQm-XRHnCywg1r5fmQLus"
-}
 
 
 
