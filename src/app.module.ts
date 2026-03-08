@@ -10,6 +10,7 @@ import { CompanyModule } from './company/company.module';
 import { BarangModule } from './barang/barang.module';
 import { Role } from '@entities/role.entity';
 import { Menu } from '@entities/menu.entity';
+import { KategoriBarang } from '@entities/kategori-barang.entity';
 import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
@@ -30,7 +31,8 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
         username: config.get('DB_USERNAME'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
-        entities: [User, Company, Barang, Role, Menu],
+        // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
+        entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         synchronize: true,
       }),
       inject: [ConfigService],

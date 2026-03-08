@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { KategoriBarang } from '@entities/kategori-barang.entity';
 
 @Entity('barang')
 export class Barang {
@@ -16,4 +23,8 @@ export class Barang {
 
   @Column({ nullable: true })
   deskripsi: string;
+
+  @ManyToOne(() => KategoriBarang, (kategori) => kategori.barang)
+  @JoinColumn({ name: 'id_kategori_barang' })
+  kategori: KategoriBarang;
 }

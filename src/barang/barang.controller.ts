@@ -13,24 +13,41 @@ import { BarangService } from './barang.service';
 import { Barang } from '../entities/barang.entity';
 import { CreateBarangDto } from './dto/create-barang.dto';
 import { UpdateBarangDto } from './dto/update-barang.dto';
+import { CreateBulkBarangDto } from './dto/create-bulk-barang.dto';
 
 @Controller('barang')
 export class BarangController {
-  constructor(private readonly barangService: BarangService) {}
+  constructor(private readonly barangService: BarangService) { }
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> {
     return this.barangService.findOne(id);
   }
   @Get()
-  async findAll(@Query('page') page = 1, @Query('limit') limit = 10) {
-    return this.barangService.findAll(+page, +limit);
+  async findAll(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('search') search = ''
+  ) {
+    return this.barangService.findAll(+page, +limit,search);
   }
 
   @Post()
   async create(@Body() data: CreateBarangDto) {
     return this.barangService.create(data);
   }
+
+  @Post('bulk')
+  async createBulk(@Body() body: CreateBulkBarangDto) {
+    const result = await this.barangService.createBulk(body);
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Bulk insert berhasil',
+      data: result,
+    };
+  }
+
   @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,

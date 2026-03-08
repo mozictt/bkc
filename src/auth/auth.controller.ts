@@ -1,11 +1,5 @@
 // src/auth/auth.controller.ts
-import {
-  Controller,
-  Post,
-  Body,
-  UnauthorizedException,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -27,7 +21,7 @@ export class AuthController {
     }
     return this.authService.login(user);
   }
-  
+
   @Post('refresh')
   async refresh(@Body() body: { userId: number; refreshToken: string }) {
     return this.authService.refresh(body.userId, body.refreshToken);
