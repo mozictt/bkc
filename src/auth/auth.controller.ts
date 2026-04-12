@@ -22,6 +22,7 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Public()
   @Post('refresh')
   async refresh(@Body() body: { userId: number; refreshToken: string }) {
     return this.authService.refresh(body.userId, body.refreshToken);

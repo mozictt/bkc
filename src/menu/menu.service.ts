@@ -35,6 +35,7 @@ export class MenuService {
       .leftJoinAndSelect('menu.children', 'children')
       .leftJoinAndSelect('menu.parent', 'parent')
       .orderBy('menu.order_no', 'ASC');
+    // console.log(qb.getMany());
 
     return qb.getMany();
   }

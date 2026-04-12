@@ -12,10 +12,17 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new ResponseInterceptor(reflector));
+  // app.enableCors({
+  //   origin: process.env.FRONTEND_URL,
+  //   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  //   allowedHeaders: 'Content-Type, Authorization',
+  //   credentials: true, // kalau pakai cookie / auth header
+  // });
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true, // kalau pakai cookie / auth header
+    origin: 'http://localhost:3000', // ganti dengan domain frontend kamu
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // method yang diizinkan
+    allowedHeaders: 'Content-Type, Authorization', // header yang diizinkan
+    credentials: true, // kalau pakai cookie / JWT di header
   });
 
   await app.listen(process.env.PORT ?? 3000);
