@@ -9,27 +9,31 @@ import {
   ParseIntPipe,
   Query,
 } from '@nestjs/common';
-import { BarangService } from './barang.service';
-import { Barang } from '../entities/barang.entity';
-import { CreateBarangDto } from './dto/create-barang.dto';
-import { UpdateBarangDto } from './dto/update-barang.dto';
-import { CreateBulkBarangDto } from './dto/create-bulk-barang.dto';
+import { BarangService } from '../services/barang.service';
+import { Barang } from '../../entities/barang.entity';
+import { CreateBarangDto } from '../dto/create-barang.dto';
+import { UpdateBarangDto } from '../dto/update-barang.dto';
+import { CreateBulkBarangDto } from '../dto/create-bulk-barang.dto';
 
 @Controller('barang')
 export class BarangController {
-  constructor(private readonly barangService: BarangService) { }
+  constructor(private readonly barangService: BarangService) {}
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> {
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> { 
     return this.barangService.findOne(id);
   }
+
   @Get()
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
-    @Query('search') search = ''
+    @Query('search') search = '',
+    @Query('sortBy') sortBy = 'id', // ✅ tambah
+    @Query('sortType') sortType = 'desc',
   ) {
-    return this.barangService.findAll(+page, +limit,search);
+    console.log("aman");
+    return this.barangService.findAll(+page, +limit, search, sortBy, sortType);
   }
 
   @Post()

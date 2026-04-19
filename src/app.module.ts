@@ -1,16 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
-import { Company } from './entities/company.entity';
-import { Barang } from './entities/barang.entity';
+import { TypeOrmModule } from '@nestjs/typeorm'; 
 import { AuthModule } from '@auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompanyModule } from './company/company.module';
-import { BarangModule } from './barang/barang.module';
-import { Role } from '@entities/role.entity';
-import { Menu } from '@entities/menu.entity';
-import { KategoriBarang } from '@entities/kategori-barang.entity';
+import { BarangModule } from './barang/module/barang.module';
+import { KategoriModule } from './barang/module/kategori.module'; 
 import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
@@ -32,7 +27,8 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
         // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
-        entities: [User, Company, Barang, Role, Menu,KategoriBarang],
+        // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
+        autoLoadEntities: true,
         synchronize: true,
       }),
       inject: [ConfigService],
@@ -42,6 +38,7 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
     CompanyModule,
     BarangModule,
     MenuModule,
+    KategoriModule,
   ],
   providers: [
     {

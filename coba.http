@@ -88,6 +88,12 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 
+### get data barang barang by id
+GET {{baseurl}}barang/110
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
 
 ### edit barang
 PUT {{baseurl}}barang/4
