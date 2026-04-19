@@ -9,6 +9,9 @@ export class KategoriBarang {
   @Column({ unique: true })
   nama: string;
 
+  @Column({ default: 'Y' })
+  status: string;
+
   @OneToMany(() => Barang, (barang) => barang.kategori)
   barang: Barang[];
 }
