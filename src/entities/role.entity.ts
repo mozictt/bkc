@@ -7,10 +7,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Menu } from '@entities/menu.entity';
+import { Menu } from './menu.entity';
+import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('roles')
-export class Role {
+export class Role extends TenantBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 

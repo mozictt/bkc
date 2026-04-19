@@ -6,9 +6,10 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { KategoriBarang } from '@entities/kategori-barang.entity';
+import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('barang')
-export class Barang {
+export class Barang extends TenantBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 

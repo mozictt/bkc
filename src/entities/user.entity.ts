@@ -6,10 +6,11 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Role } from '@entities/role.entity';
+import { Role } from './role.entity';
+import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('users')
-export class User {
+export class User extends TenantBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 

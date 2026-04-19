@@ -60,6 +60,7 @@ export class AuthService {
     const payload = {
       sub: user.id,
       username: user.username,
+      tenantId: user.tenantId, // 👈 Masukkan tenantId ke JWT
       role: user.role?.name,
       menus, // optional kalau mau masuk JWT
     };
@@ -81,6 +82,7 @@ export class AuthService {
         username: user.username,
         role: user.role?.name,
         id_role: user.role?.id,
+        tenantId: user.tenantId, // 👈 Return tenantId ke client
         menus,
       },
       accessToken,
@@ -129,6 +131,7 @@ export class AuthService {
     const payload = {
       sub: user.id,
       username: user.username,
+      tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
       role: user.role?.name,
       menus: user.role?.menus?.map((menu) => menu.url).filter(Boolean) || [],
     };
@@ -149,7 +152,7 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     //  console.log('registerDto:', registerDto); // tampilkan isi registerDto
     // return;
-    const { username, password, id_role } = registerDto;
+    const { username, password, id_role, tenantId } = registerDto;
     // Cek jika user sudah ada
     const existingUser = await this.userService.findByUsername(username);
     if (existingUser) {
@@ -170,6 +173,7 @@ export class AuthService {
       username,
       hashedPassword,
       id_role,
+      tenantId, // 👈 Kirim tenantId ke service user
     );
     return { message: 'Registrasi berhasil', userId: user.id };
   }

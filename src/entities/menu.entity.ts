@@ -9,10 +9,11 @@ import {
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
-import { Role } from '@entities/role.entity';
+import { Role } from './role.entity';
+import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('menus')
-export class Menu {
+export class Menu extends TenantBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
