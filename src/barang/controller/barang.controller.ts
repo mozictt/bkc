@@ -8,13 +8,17 @@ import {
   Param,
   ParseIntPipe,
   Query,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { BarangService } from '../services/barang.service';
 import { Barang } from '../../entities/barang.entity';
 import { CreateBarangDto } from '../dto/create-barang.dto';
 import { UpdateBarangDto } from '../dto/update-barang.dto';
 import { CreateBulkBarangDto } from '../dto/create-bulk-barang.dto';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('barang')
 export class BarangController {
   constructor(private readonly barangService: BarangService) {}
@@ -32,7 +36,6 @@ export class BarangController {
     @Query('sortBy') sortBy = 'id', // ✅ tambah
     @Query('sortType') sortType = 'desc',
   ) {
-    console.log("aman");
     return this.barangService.findAll(+page, +limit, search, sortBy, sortType);
   }
 

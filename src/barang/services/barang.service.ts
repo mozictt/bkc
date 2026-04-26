@@ -6,76 +6,55 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Barang } from '@entities/barang.entity';
-// import { KategoriBarang } from '@entities/kategori-barang.entity';
 import { KategoriBarang } from '@entities/kategori-barang.entity';
 import { CreateBulkBarangDto } from '../dto/create-bulk-barang.dto';
+import { TenantContextService } from '../../common/tenant/tenant-context.service';
+import { BaseTenantService } from '../../common/tenant/base-tenant.service';
+import { tenantInnerJoin } from '../../common/utils/query-utils';
 
 @Injectable()
-export class BarangService {
+export class BarangService extends BaseTenantService<Barang> {
   constructor(
     @InjectRepository(Barang)
     private readonly barangRepo: Repository<Barang>,
-    @InjectRepository(KategoriBarang) // ✅ TAMBAHKAN INI
+    tenantService: TenantContextService,
+    @InjectRepository(KategoriBarang)
     private readonly kategoriRepo: Repository<KategoriBarang>,
-  ) {}
+  ) {
+    // 'b' adalah alias untuk tabel barang
+    super(barangRepo, tenantService, 'b');
+  }
 
-  //   async findAll(): Promise<Barang[]> {
-  //     return this.barangRepo.find();
-  //   }
-  // async findAll(page = 1, limit = 10): Promise<any> {
-  //   const [data, total] = await this.barangRepo.findAndCount({
-  //     skip: (page - 1) * limit,
-  //     take: limit,
-  //   });
-
-  //   return {
-  //     success: true,
-  //     currentPage: page,
-  //     totalItems: total,
-  //     totalPages: Math.ceil(total / limit),
-  //     array:data,
-  //   };
-  // }
+  /**
+   * Mengambil semua barang (Filter tenantId OTOMATIS dari Base Service)
+   */
   async findAll(
     page = 1,
     limit = 10,
     search = '',
     sortBy = 'id',
     sortType = 'desc',
-  ): Promise<any> {
-    // Proteksi pagination agar tidak negatif
+  ) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.max(1, limit);
+    const tid = this.tenantService.getTenantId();
 
-    const query = this.barangRepo.createQueryBuilder('barang')
-      .leftJoinAndSelect('barang.kategori', 'kategori');
-    /* =========================
-     SEARCH
-  ========================= */
+    // createQuery() sudah mengandung "WHERE b.tenantId = :tenantId"
+    const qb = this.createQuery();
+    tenantInnerJoin(qb, 'b.kategori', 'kategori', tid);
+
     if (search) {
-      query.where(
-        'UPPER(barang.nama) LIKE :search OR UPPER(barang.deskripsi) LIKE :search',
-        {
-          search: `%${search.toUpperCase()}%`,
-        },
+      qb.andWhere(
+        '(UPPER(b.nama) LIKE :search OR UPPER(b.deskripsi) LIKE :search)',
+        { search: `%${search.toUpperCase()}%` },
       );
     }
 
-    /* =========================
-     SORTING (WAJIB WHITELIST)
-  ========================= */
     const allowedSort = ['id', 'nama', 'harga', 'stok'];
-
     const orderBy = allowedSort.includes(sortBy) ? sortBy : 'id';
-    const orderType = sortType === 'asc' ? 'ASC' : 'DESC';
 
-    query.orderBy(`barang.${orderBy}`, orderType);
-    // console.log(query.getSql());
-
-    /* =========================
-     PAGINATION
-  ========================= */
-    const [data, total] = await query
+    const [data, total] = await qb
+      .orderBy(`b.${orderBy}`, sortType.toUpperCase() as any)
       .skip((safePage - 1) * safeLimit)
       .take(safeLimit)
       .getManyAndCount();
@@ -89,67 +68,72 @@ export class BarangService {
     };
   }
 
-  async findOne(id: number): Promise<Barang> {
-    const barang = await this.barangRepo.createQueryBuilder('barang')
-      .leftJoinAndSelect('barang.kategori', 'kategori')
-      .where('barang.id = :id', { id })
+  /**
+   * Mengambil satu barang (Otomatis terfilter tenantId)
+   */
+  async findOne(id: number) {
+    // Kita gunakan createQuery agar bisa include leftJoin
+    const barang = await this.createQuery()
+      .leftJoinAndSelect('b.kategori', 'kategori')
+      .andWhere('b.id = :id', { id })
       .getOne();
 
     if (!barang) throw new NotFoundException('Barang tidak ditemukan');
     return barang;
   }
 
-  async create(data: Partial<Barang>): Promise<Barang> {
+  /**
+   * Create (tenantId diisi otomatis oleh TenantSubscriber)
+   */
+  async create(data: Partial<Barang>) {
     const barang = this.barangRepo.create(data);
     return this.barangRepo.save(barang);
   }
 
-  // async createBulk(data: Partial<Barang>[]): Promise<any> {
-  //   const result = await this.barangRepo.insert(data);
-
-  //   return {
-  //     success: true,
-  //     inserted: result.identifiers.length,
-  //     ids: result.identifiers,
-  //   };
-  // }
+  /**
+   * Create Bulk (tenantId diisi otomatis oleh TenantSubscriber)
+   */
   async createBulk(body: CreateBulkBarangDto) {
-    // 1️⃣ Cek kategori dulu
+    // Validasi kategori harus milik tenant yang sama
     const kategori = await this.kategoriRepo.findOne({
-      where: { nama: body.kategori },
+      where: {
+        nama: body.kategori,
+        tenantId: this.tenantService.getTenantId(), // Ambil dari BaseTenantService
+      } as any,
     });
 
-    if (!kategori) {
-      throw new NotFoundException('Kategori tidak ditemukan');
-    }
+    if (!kategori) throw new NotFoundException('Kategori tidak ditemukan');
 
-    // 2️⃣ Mapping data + inject id kategori
     const dataWithKategori = body.data.map((item) => ({
       ...item,
-      kategori: kategori, // otomatis isi id_kategori_barang
+      kategori: kategori,
     }));
 
-    // 3️⃣ Insert
     return this.barangRepo.save(dataWithKategori);
   }
 
-  async update(id: number, data: Partial<Barang>): Promise<Barang> {
+  /**
+   * Update (Otomatis terfilter tenantId via findOne)
+   */
+  async update(id: number, data: Partial<Barang>) {
     const existing = await this.findOne(id);
     Object.assign(existing, data);
     return this.barangRepo.save(existing);
   }
 
-  async remove(id: number): Promise<void> {
+  /**
+   * Remove (Soft Delete recommended untuk project besar)
+   */
+  async remove(id: number) {
     const existing = await this.findOne(id);
     try {
-      await this.barangRepo.remove(existing);
-    } catch (error) { 
+      return await this.barangRepo.softRemove(existing);
+    } catch (error) {
       if (error.code === '23503') {
         throw new ConflictException(
-          'Barang tidak bisa dihapus karena sudah memiliki riwayat transaksi atau referensi data lain',
+          'Barang tidak bisa dihapus karena sudah digunakan dalam transaksi',
         );
       }
-      // Throw error asli jika itu error database lainnya
       throw error;
     }
   }

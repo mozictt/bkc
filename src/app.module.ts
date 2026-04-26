@@ -1,14 +1,17 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm'; 
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '@auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompanyModule } from './company/company.module';
 import { BarangModule } from './barang/module/barang.module';
-import { KategoriModule } from './barang/module/kategori.module'; 
+import { KategoriModule } from './barang/module/kategori.module';
+import { CommonModule } from './common/common.module';
 import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
+import { TenantMiddleware } from './common/tenant/tenant.middleware';
+import { TenantContextService } from './common/tenant/tenant-context.service';
 
 @Module({
   imports: [
@@ -26,6 +29,7 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
         username: config.get('DB_USERNAME'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
+        timezone: config.get<string>('APP_TIMEZONE') || 'UTC',
         // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         autoLoadEntities: true,
@@ -39,6 +43,7 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
     BarangModule,
     MenuModule,
     KategoriModule,
+    CommonModule,
   ],
   providers: [
     {
@@ -47,4 +52,10 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TenantMiddleware) // Gunakan middleware ini
+      .forRoutes('*'); // Terapkan ke semua route (atau tentukan route tertentu)
+  }
+}

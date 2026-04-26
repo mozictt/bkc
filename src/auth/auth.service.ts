@@ -75,7 +75,7 @@ export class AuthService {
     });
 
     await this.userService.updateRefreshToken(user.id, refreshToken);
-
+    // console.log(user.tenantId);
     return {
       user: {
         id: user.id,

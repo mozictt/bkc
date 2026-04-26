@@ -1,47 +1,49 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KategoriBarang } from '@entities/kategori-barang.entity';
 import { CreateKategoriDto } from '../dto/create-kategori.dto';
 import { UpdateKategoriDto } from '../dto/update-kategori.dto';
+import { TenantContextService } from '../../common/tenant/tenant-context.service';
+import { BaseTenantService } from '../../common/tenant/base-tenant.service';
 
 @Injectable()
-export class KategoriService {
+export class KategoriService extends BaseTenantService<KategoriBarang> {
   constructor(
     @InjectRepository(KategoriBarang)
-    private readonly kategoriRepo: Repository<KategoriBarang>,
-  ) {}
+    private readonly repo: Repository<KategoriBarang>,
+    tenantService: TenantContextService,
+  ) {
+    // 'k' adalah alias tabel kategori untuk query builder
+    super(repo, tenantService, 'k');
+  }
 
+  /**
+   * Mengambil semua data kategori dengan filter tenantId otomatis
+   */
   async findAll(
     page = 1,
     limit = 10,
     search = '',
     sortBy = 'id',
     sortType = 'desc',
-  ): Promise<any> {
-    // Pastikan page dan limit valid untuk mencegah error OFFSET negatif di DB
-    const safePage = Math.max(1, page);
+  ) {
     const safeLimit = Math.max(1, limit);
+    const safePage = Math.max(1, page);
 
-    const query = this.kategoriRepo.createQueryBuilder('kategori');
+    // createQuery() berasal dari BaseTenantService, sudah include: WHERE k.tenantId = :tenantId
+    const qb = this.createQuery();
 
     if (search) {
-      query.where('UPPER(kategori.nama) LIKE :search', {
-        search: `%${search.toUpperCase()}%`,
-      });
+      qb.andWhere('UPPER(k.nama) LIKE :s', { s: `%${search.toUpperCase()}%` });
     }
 
+    // Validasi kolom sort agar aman dari SQL Injection
     const allowedSort = ['id', 'nama'];
-    const orderBy = allowedSort.includes(sortBy) ? sortBy : 'id';
-    const orderType = sortType === 'asc' ? 'ASC' : 'DESC';
+    const orderColumn = allowedSort.includes(sortBy) ? sortBy : 'id';
 
-    query.orderBy(`kategori.${orderBy}`, orderType);
-
-    const [data, total] = await query
+    const [data, total] = await qb
+      .orderBy(`k.${orderColumn}`, sortType.toUpperCase() as any)
       .skip((safePage - 1) * safeLimit)
       .take(safeLimit)
       .getManyAndCount();
@@ -55,51 +57,61 @@ export class KategoriService {
     };
   }
 
-  async findOne(id: number): Promise<KategoriBarang> {
-    const kategori = await this.kategoriRepo.findOne({
-      where: { id }, // Jika ingin melihat daftar barang di kategori tersebut
-    });
-
-    if (!kategori) throw new NotFoundException('Kategori tidak ditemukan');
-    return kategori;
+  /**
+   * Mengambil satu data (Otomatis terfilter tenantId di BaseService)
+   */
+  async findOne(id: number) {
+    return this.findOneById(id);
   }
 
-  async create(data: CreateKategoriDto): Promise<KategoriBarang> {
-    try {
-      const kategori = this.kategoriRepo.create(data);
-      return await this.kategoriRepo.save(kategori);
-    } catch (error) {
-      if (error.code === '23505') {
-        throw new ConflictException('Nama kategori sudah digunakan');
-      }
-      throw error;
-    }
+  /**
+   * Membuat kategori baru
+   * tenantId akan diisi OTOMATIS oleh TenantSubscriber
+   */
+  async create(dto: CreateKategoriDto) {
+    const kategori = this.repo.create(dto);
+    return this.handleSave(kategori);
   }
 
-  async update(id: number, data: UpdateKategoriDto): Promise<KategoriBarang> {
-    const existing = await this.findOne(id);
-    Object.assign(existing, data);
-    try {
-      return await this.kategoriRepo.save(existing);
-    } catch (error) {
-      if (error.code === '23505') {
-        throw new ConflictException('Nama kategori sudah digunakan');
-      }
-      throw error;
-    }
+  /**
+   * Mengupdate kategori
+   */
+  async update(id: number, dto: UpdateKategoriDto) {
+    const existing = await this.findOneById(id);
+    const updated = Object.assign(existing, dto);
+    return this.handleSave(updated);
   }
 
-  async remove(id: number): Promise<void> {
-    const existing = await this.findOne(id);
+  /**
+   * Menghapus kategori
+   */
+  async remove(id: number) {
+    const existing = await this.findOneById(id);
     try {
-      await this.kategoriRepo.remove(existing);
-    } catch (error) {
-      if (error.code === '23503') {
+      return await this.repo.softRemove(existing);
+    } catch (e) {
+      // Handling error relasi database (FK Constraint)
+      if (e.code === '23503') {
         throw new ConflictException(
           'Kategori tidak bisa dihapus karena masih digunakan oleh data barang',
         );
       }
-      throw error;
+      throw e;
+    }
+  }
+
+  /**
+   * Wrapper untuk menyimpan data ke DB dengan error handling yang konsisten
+   */
+  private async handleSave(data: any) {
+    try {
+      return await this.repo.save(data);
+    } catch (e) {
+      // Handling error unique constraint (Duplicate Nama)
+      if (e.code === '23505') {
+        throw new ConflictException('Nama kategori sudah digunakan');
+      }
+      throw e;
     }
   }
 }

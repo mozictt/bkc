@@ -5,6 +5,8 @@ import { Reflector } from '@nestjs/core';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { ValidationPipe } from '@nestjs/common';
 
+process.env.TZ = process.env.APP_TIMEZONE || 'UTC';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new AllExceptionsFilter());

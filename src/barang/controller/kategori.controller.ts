@@ -8,11 +8,15 @@ import {
   Param,
   ParseIntPipe,
   Query,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { KategoriService } from '../services/kategori.service';
 import { CreateKategoriDto } from '../dto/create-kategori.dto';
 import { UpdateKategoriDto } from '../dto/update-kategori.dto';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('kategori')
 export class KategoriController {
   constructor(private readonly kategoriService: KategoriService) {}
