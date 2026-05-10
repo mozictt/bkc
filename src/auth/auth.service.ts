@@ -17,7 +17,7 @@ export class AuthService {
     private userService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   // async validateUser(username: string, password: string) {
   //   const user = await this.userService.findByUsername(username);
@@ -28,7 +28,6 @@ export class AuthService {
   // }
   async validateUser(username: string, password: string) {
     const user = await this.userService.findByUsername(username);
-
     if (user && (await bcrypt.compare(password, user.password))) {
       return user; // sudah termasuk role & menus
     }
@@ -46,16 +45,7 @@ export class AuthService {
   //   return { accessToken, refreshToken };
   // }
   async login(user: any) {
-    const menus =
-      user.role?.menus?.map((menu) => ({
-        path: menu.url, // 🔥 ubah jadi object
-      })).filter((m) => m.path) || [];
-
-    // ✅ inject default "/"
-    const hasRoot = menus.some((m) => m.path === "/");
-    if (!hasRoot) {
-      menus.unshift({ path: "/" });
-    }
+    const menus = this.mapMenus(user.role?.permissions);
 
     const payload = {
       sub: user.id,
@@ -133,7 +123,7 @@ export class AuthService {
       username: user.username,
       tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
       role: user.role?.name,
-      menus: user.role?.menus?.map((menu) => menu.url).filter(Boolean) || [],
+      menus: this.mapMenus(user.role?.permissions),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -176,5 +166,52 @@ export class AuthService {
       tenantId, // 👈 Kirim tenantId ke service user
     );
     return { message: 'Registrasi berhasil', userId: user.id };
+  }
+
+  private mapMenus(permissions: any[]): any[] {
+    console.log(permissions);
+    const flatMenus =
+      permissions
+        ?.map((p: any) => ({
+          id: p.menu?.id,
+          parentId: p.menu?.parent?.id || null,
+          name: p.menu?.name,
+          path: p.menu?.url,
+          icon: p.menu?.icon,
+          order_no: p.menu?.order_no || 0,
+          actions: p.actions,
+        }))
+        .filter((m) => m.id) || [];
+
+    const menuMap = new Map();
+    const tree = [];
+
+    // Buat map untuk akses cepat
+    flatMenus.forEach((item) => {
+      menuMap.set(item.id, { ...item, children: [] });
+    });
+
+    // Susun hirarki
+    flatMenus.forEach((item) => {
+      const node = menuMap.get(item.id);
+      if (item.parentId && menuMap.has(item.parentId)) {
+        menuMap.get(item.parentId).children.push(node);
+      } else {
+        tree.push(node);
+      }
+    });
+
+    const finalTree = tree.sort((a, b) => a.order_no - b.order_no);
+
+    if (!finalTree.some((m) => m.path === '/')) {
+      finalTree.unshift({
+        name: 'Home',
+        path: '/',
+        icon: 'home',
+        actions: [],
+        children: [],
+      });
+    }
+    return finalTree;
   }
 }

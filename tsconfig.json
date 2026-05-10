@@ -9,13 +9,14 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    // "baseUrl": "./",
-    "baseUrl": "./src",
+    "baseUrl": "./",
+    // "baseUrl": "./src",
     "paths": {
-      "@entities/*": ["entities/*"],
-      "@modules/*": ["modules/*"],
-      "@dto/*": ["dto/*"],
-      "@auth/*": ["auth/*"]
+      "@entities/*": ["src/entities/*"],
+      "@modules/*": ["src/modules/*"],
+      "@common/*": ["src/common/*"],
+      "@dto/*": ["src/dto/*"],
+      "@auth/*": ["src/auth/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

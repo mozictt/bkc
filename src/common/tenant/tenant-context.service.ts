@@ -15,7 +15,7 @@ export class TenantContextService {
   getTenantId(): string | undefined {
     const store = TenantContextService.storage.getStore();
     const tenantId = store?.get('tenantId');
-    // console.log("kene");
+    console.log("kene");
     // Jika tenantId adalah number (dari DB/JWT), konversi ke string agar konsisten
     return tenantId !== undefined && tenantId !== null 
       ? String(tenantId) 

@@ -5,17 +5,25 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Menu } from '@entities/menu.entity';
+import { TenantContextService } from '../common/tenant/tenant-context.service';
 
 @Injectable()
 export class MenuService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   async createMenu(data: Partial<Menu>): Promise<Menu> {
+    const tenantId = this.tenantContext.getTenantId();
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      // Pastikan tenantId ikut tersimpan saat create
+      if (tenantId) data.tenantId = tenantId;
+
       const menu = queryRunner.manager.create(Menu, data);
       await queryRunner.manager.save(Menu, menu);
       await queryRunner.commitTransaction();
@@ -29,25 +37,39 @@ export class MenuService {
   }
 
   async getAllMenus(): Promise<Menu[]> {
+    const tenantId = this.tenantContext.getTenantId();
+
     const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
       .leftJoinAndSelect('menu.children', 'children')
       .leftJoinAndSelect('menu.parent', 'parent')
-      .orderBy('menu.order_no', 'ASC');
-    // console.log(qb.getMany());
+
+    if (tenantId) {
+      qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+    }
+
+    qb.orderBy('menu.order_no', 'ASC');
 
     return qb.getMany();
   }
+
   async getAllMenusByRoleId(id: number): Promise<Menu[]> {
+    const tenantId = this.tenantContext.getTenantId();
+
     const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
       .innerJoin('menu.roles', 'role')
       .leftJoinAndSelect('menu.children', 'children')
       .leftJoinAndSelect('menu.parent', 'parent')
-      .where('role.id = :id', { id })
-      .orderBy('menu.order_no', 'ASC');
+      .where('role.id = :id', { id });
+
+    if (tenantId) {
+      qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+    }
+
+    qb.orderBy('menu.order_no', 'ASC');
 
     const menus = await qb.getMany();
     if (!menus || menus.length === 0) {
@@ -57,13 +79,20 @@ export class MenuService {
   }
 
   async getMenuById(id: number): Promise<Menu> {
-    const menu = await this.dataSource
+    const tenantId = this.tenantContext.getTenantId();
+
+    const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
       .leftJoinAndSelect('menu.children', 'children')
       .leftJoinAndSelect('menu.parent', 'parent')
-      .where('menu.id = :id', { id })
-      .getOne();
+      .where('menu.id = :id', { id });
+
+    if (tenantId) {
+      qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+    }
+
+    const menu = await qb.getOne();
 
     if (!menu) throw new NotFoundException('Menu not found');
     return menu;

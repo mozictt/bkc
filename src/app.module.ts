@@ -11,7 +11,6 @@ import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
 import { TenantMiddleware } from './common/tenant/tenant.middleware';
-import { TenantContextService } from './common/tenant/tenant-context.service';
 
 @Module({
   imports: [
@@ -34,6 +33,25 @@ import { TenantContextService } from './common/tenant/tenant-context.service';
         // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         autoLoadEntities: true,
         synchronize: true,
+        define: {
+          hooks: {
+            beforeFind: (options) => {
+              const tenantId = getTenantId();
+              if (tenantId) {
+                options.where = {
+                  ...(options.where || {}),
+                  tenantId
+                };
+              }
+            },
+            beforeCreate: (instance) => {
+              const tenantId = getTenantId();
+              if (tenantId) {
+                instance.set('tenantId', tenantId);
+              }
+            },
+          }
+        }
       }),
       inject: [ConfigService],
     }),

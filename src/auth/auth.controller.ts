@@ -11,11 +11,11 @@ export class AuthController {
   constructor(private authService: AuthService) {}
   @Public()
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto) { 
     const user = await this.authService.validateUser(
       loginDto.username,
       loginDto.password,
-    );
+    ); 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }

@@ -8,8 +8,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Relation,
 } from 'typeorm';
 import { Role } from './role.entity';
+import { RoleMenuPermission } from './role-menu-permissions.entity';
 import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('menus')
@@ -42,12 +44,6 @@ export class Menu extends TenantBaseEntity {
   @OneToMany(() => Menu, (menu) => menu.parent)
   children: Menu[];
 
-  @ManyToMany(() => Role, (role) => role.menus)
-  roles: Role[];
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  @OneToMany(() => RoleMenuPermission, (rmp) => rmp.menu)
+  permissions: Relation<RoleMenuPermission>[];
 }

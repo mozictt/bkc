@@ -20,7 +20,7 @@ export class User extends TenantBaseEntity {
   @Column()
   password: string;
 
-  @ManyToOne(() => Role, { eager: true }) // 👈 eager = auto load saat user diambil
+  @ManyToOne(() => Role)
   @JoinColumn({ name: 'role_id' }) // FK: role_id
   role: Role;
 

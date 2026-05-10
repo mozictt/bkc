@@ -2,13 +2,16 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  OneToMany,
+  ManyToOne,
   ManyToMany,
-  JoinTable,
   CreateDateColumn,
   UpdateDateColumn,
+  JoinTable,
 } from 'typeorm';
-import { Menu } from './menu.entity';
 import { TenantBaseEntity } from './tenant-base.entity';
+import { RoleMenuPermission } from './role-menu-permissions.entity';
+import { Menu } from './menu.entity';
 
 @Entity('roles')
 export class Role extends TenantBaseEntity {
@@ -21,18 +24,8 @@ export class Role extends TenantBaseEntity {
   @Column({ nullable: true })
   description: string;
 
-  // @ManyToMany(() => Menu, (menu) => menu.roles, { cascade: true })
-  @ManyToMany(() => Menu, (menu) => menu.roles, { eager: true })
-  @JoinTable({
-    name: 'role_menu', // Pivot table
-    joinColumn: { name: 'role_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'menu_id', referencedColumnName: 'id' },
+  @OneToMany(() => RoleMenuPermission, (rmp) => rmp.role, {
+    cascade: true,
   })
-  menus: Menu[];
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  permissions: RoleMenuPermission[];
 }

@@ -13,8 +13,8 @@ export default class TenantSeeder implements Seeder {
     await repository.upsert(
       [
         {
-          // id: '00000000-0000-0000-0000-000000000000',
-          id: randomUUID(),
+          id: '00000000-0000-0000-0000-000000000000',
+          // id: randomUUID(),
           name: 'Master Admin',
           slug: 'admin',
           isActive: true,
