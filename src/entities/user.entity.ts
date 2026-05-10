@@ -24,6 +24,6 @@ export class User extends TenantBaseEntity {
   @JoinColumn({ name: 'role_id' }) // FK: role_id
   role: Role;
 
-  @Column({ nullable: true})
+  @Column({ nullable: true })
   refreshToken: string;
 }

@@ -10,12 +10,16 @@ import { CommonModule } from './common/common.module';
 import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
-import { TenantMiddleware } from './common/tenant/tenant.middleware';
-
+import { TenantMiddleware } from './common/tenant/tenant.middleware'; 
+import { RedisModule } from '@nestjs-modules/ioredis';
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    RedisModule.forRoot({
+      type: 'single',
+      url: 'redis://localhost:6379',
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -40,7 +44,7 @@ import { TenantMiddleware } from './common/tenant/tenant.middleware';
               if (tenantId) {
                 options.where = {
                   ...(options.where || {}),
-                  tenantId
+                  tenantId,
                 };
               }
             },
@@ -50,8 +54,8 @@ import { TenantMiddleware } from './common/tenant/tenant.middleware';
                 instance.set('tenantId', tenantId);
               }
             },
-          }
-        }
+          },
+        },
       }),
       inject: [ConfigService],
     }),

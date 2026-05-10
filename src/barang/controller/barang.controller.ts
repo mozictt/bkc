@@ -17,18 +17,22 @@ import { CreateBarangDto } from '../dto/create-barang.dto';
 import { UpdateBarangDto } from '../dto/update-barang.dto';
 import { CreateBulkBarangDto } from '../dto/create-bulk-barang.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { CheckPermission } from '@auth/decorators/permissions.decorator';
+import { PermissionsGuard } from '@auth/guards/permissions.guard';
 
-@UseGuards(JwtAuthGuard)
+
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('barang')
 export class BarangController {
-  constructor(private readonly barangService: BarangService) {}
+  constructor(private readonly barangService: BarangService) { }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> { 
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> {
     return this.barangService.findOne(id);
   }
 
   @Get()
+  @CheckPermission('view', 'Barang')
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,

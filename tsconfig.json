@@ -16,7 +16,8 @@
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"],
       "@dto/*": ["src/dto/*"],
-      "@auth/*": ["src/auth/*"]
+      "@auth/*": ["src/auth/*"],
+      "@src/*": ["src/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

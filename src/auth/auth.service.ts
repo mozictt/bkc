@@ -50,9 +50,9 @@ export class AuthService {
     const payload = {
       sub: user.id,
       username: user.username,
-      tenantId: user.tenantId, // 👈 Masukkan tenantId ke JWT
-      role: user.role?.name,
-      menus, // optional kalau mau masuk JWT
+      tenantId: user.tenantId, // 👈 Masukkan tenantId ke JWT 
+      role_id: user.role?.id,
+      // menus, // optional kalau mau masuk JWT
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -123,7 +123,7 @@ export class AuthService {
       username: user.username,
       tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
       role: user.role?.name,
-      menus: this.mapMenus(user.role?.permissions),
+      // menus: this.mapMenus(user.role?.permissions),
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -169,22 +169,27 @@ export class AuthService {
   }
 
   private mapMenus(permissions: any[]): any[] {
-    console.log(permissions);
     const flatMenus =
       permissions
-        ?.map((p: any) => ({
-          id: p.menu?.id,
-          parentId: p.menu?.parent?.id || null,
-          name: p.menu?.name,
-          path: p.menu?.url,
-          icon: p.menu?.icon,
-          order_no: p.menu?.order_no || 0,
-          actions: p.actions,
-        }))
+        ?.map((p: any) => {
+          // Logika default action: jika null/undefined/kosong, isi dengan ["view"]
+          const sanitizedActions =
+            p.actions && p.actions.length > 0 ? p.actions : ['view'];
+
+          return {
+            id: p.menu?.id,
+            parentId: p.menu?.parent?.id || null,
+            name: p.menu?.name,
+            path: p.menu?.url,
+            icon: p.menu?.icon,
+            order_no: p.menu?.order_no || 0,
+            actions: sanitizedActions, // Gunakan hasil sanitasi
+          };
+        })
         .filter((m) => m.id) || [];
 
     const menuMap = new Map();
-    const tree = [];
+    const tree: any[] = [];
 
     // Buat map untuk akses cepat
     flatMenus.forEach((item) => {
@@ -201,17 +206,20 @@ export class AuthService {
       }
     });
 
+    // Urutkan berdasarkan order_no
     const finalTree = tree.sort((a, b) => a.order_no - b.order_no);
 
+    // Pastikan menu Home ada di paling atas
     if (!finalTree.some((m) => m.path === '/')) {
       finalTree.unshift({
         name: 'Home',
         path: '/',
         icon: 'home',
-        actions: [],
+        actions: ['view'], // Sebaiknya Home juga diberi 'view' agar konsisten
         children: [],
       });
     }
+
     return finalTree;
   }
 }
