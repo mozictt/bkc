@@ -1,17 +1,23 @@
-import {
-  Injectable,
+import { 
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import {
+  InjectRepository,
+  InternalServerErrorException,
+} from '@nestjs/typeorm';
 import { Menu } from '@entities/menu.entity';
 import { TenantContextService } from '../common/tenant/tenant-context.service';
-
-@Injectable()
+import { RoleMenuPermission } from '@entities/role-menu-permissions.entity';
+import { UpdatePermissionDto } from './dto/update-permission.dto';
+ 
 export class MenuService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly tenantContext: TenantContextService,
+    @InjectRepository(RoleMenuPermission)
+    private readonly permissionRepo: Repository<RoleMenuPermission>,
   ) {}
 
   async createMenu(data: Partial<Menu>): Promise<Menu> {
@@ -43,7 +49,7 @@ export class MenuService {
       .getRepository(Menu)
       .createQueryBuilder('menu')
       .leftJoinAndSelect('menu.children', 'children')
-      .leftJoinAndSelect('menu.parent', 'parent')
+      .leftJoinAndSelect('menu.parent', 'parent');
 
     if (tenantId) {
       qb.andWhere('menu.tenantId = :tenantId', { tenantId });
@@ -57,25 +63,31 @@ export class MenuService {
   async getAllMenusByRoleId(id: number): Promise<Menu[]> {
     const tenantId = this.tenantContext.getTenantId();
 
-    const qb = this.dataSource
-      .getRepository(Menu)
-      .createQueryBuilder('menu')
-      .innerJoin('menu.roles', 'role')
-      .leftJoinAndSelect('menu.children', 'children')
-      .leftJoinAndSelect('menu.parent', 'parent')
-      .where('role.id = :id', { id });
+    try {
+      const qb = this.dataSource
+        .getRepository(Menu)
+        .createQueryBuilder('menu')
+        .innerJoinAndSelect('menu.permissions', 'rmp')
+        .innerJoin('rmp.role', 'role')
+        .where('role.id = :id', { id });
 
-    if (tenantId) {
-      qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+      if (tenantId) {
+        qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+      }
+
+      qb.orderBy('menu.order_no', 'ASC');
+
+      const menus = await qb.getMany();
+      if (!menus || menus.length === 0) {
+        throw new NotFoundException('Data menu tidak ditemukan');
+      }
+      return menus;
+    } catch (error) {
+      // 3. Catch akan menangkap eror apa pun yang terjadi di dalam blok try
+      console.error('--- ERROR TERDETEKSI DI GETALLMENUS ---');
+      console.error(error);
+      throw error; // Lempar kembali eror agar tidak tertelan
     }
-
-    qb.orderBy('menu.order_no', 'ASC');
-
-    const menus = await qb.getMany();
-    if (!menus || menus.length === 0) {
-      throw new NotFoundException('Data menu tidak ditemukan');
-    }
-    return menus;
   }
 
   async getMenuById(id: number): Promise<Menu> {
@@ -137,6 +149,46 @@ export class MenuService {
       throw new InternalServerErrorException('Failed to delete menu');
     } finally {
       await queryRunner.release();
+    }
+  }
+  async updateRoleMenuPermission(
+    dto: UpdatePermissionDto,
+  ): Promise<RoleMenuPermission> {
+    const { roleId, menuId, actions } = dto;
+    try {
+      // 1. Cari apakah permission untuk role dan menu ini sudah pernah dibuat
+      let permission: RoleMenuPermission | null =
+        await this.permissionRepo.findOne({
+          where: {
+            role: { id: roleId },
+            menu: { id: menuId },
+          },
+        });
+
+      if (permission) {
+        // 2. Jika sudah ada, tinggal update array actions-nya
+        permission.actions = actions;
+      } else {
+        // 3. Jika belum ada, buat entity baru dan pasang relasinya
+        permission = this.permissionRepo.create({
+          role: { id: roleId },
+          menu: { id: menuId },
+          actions,
+        });
+      }
+
+      // 4. Simpan perubahan ke database
+      return await this.permissionRepo.save(permission);
+    } catch (unknownError: unknown) {
+      // 1. Definisikan tipe catch secara eksplisit sebagai unknown (standar TS modern)
+      // 2. Lemparkan kembali (throw) error agar return type Promise<RoleMenuPermission> terpenuhi
+      if (unknownError instanceof Error) {
+        console.error(unknownError.message);
+        throw new InternalServerErrorException(unknownError.message);
+      }
+
+      console.error('Terjadi error yang tidak diketahui', unknownError);
+      throw new InternalServerErrorException('Terjadi kesalahan pada server');
     }
   }
 }

@@ -5,4 +5,5 @@ export enum MenuAction {
   DELETE = 'delete',
   APPROVE = 'approve',
   EXPORT = 'export',
+  MANAGE = 'manage',
 }

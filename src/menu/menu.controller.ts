@@ -10,7 +10,8 @@ import {
 } from '@nestjs/common';
 import { MenuService } from './menu.service';
 import { Menu } from '@entities/menu.entity';
-
+import { UpdatePermissionDto } from './dto/update-permission.dto';
+import { Message } from '@common/decorators/message.decorator';
 @Controller('menus')
 export class MenuController {
   constructor(private readonly menuService: MenuService) {}
@@ -26,8 +27,14 @@ export class MenuController {
   }
 
   @Get('role/:id')
-  findAllByRoleId(@Param('id', ParseIntPipe) id: number) {
+  findAllByRoleId(@Param('id', ParseIntPipe) id: number) { 
     return this.menuService.getAllMenusByRoleId(id);
+  }
+
+  @Put('permissions')
+  @Message('Permission menu berhasil diubah')
+  updatePermission(@Body() body: UpdatePermissionDto) { 
+    return this.menuService.updateRoleMenuPermission(body);
   }
 
   @Get(':id')

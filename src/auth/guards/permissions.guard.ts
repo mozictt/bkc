@@ -39,6 +39,8 @@ export class PermissionsGuard implements CanActivate {
     // ioredis mengembalikan string, jadi kita perlu parse JSON
     const cachedData = await this.redis.get(cacheKey);
     let userMenus: any[] | null = cachedData ? JSON.parse(cachedData) : null;
+    console.log(userMenus);
+
 
     // 2. Jika Cache Miss
     if (!userMenus) {
@@ -58,13 +60,7 @@ export class PermissionsGuard implements CanActivate {
       try {
         // 'EX' 36000 berarti expired dalam 36000 detik (10 jam)
         // ioredis menggunakan detik untuk opsi 'EX'
-        await this.redis.set(
-          cacheKey, 
-          JSON.stringify(userMenus), 
-          'EX', 
-          36000
-        );
-        
+        await this.redis.set(cacheKey, JSON.stringify(userMenus), 'EX', 36000);
         console.log(`[Redis] Data user ${user.userId} berhasil disimpan.`);
       } catch (error) {
         console.error('Redis Set Error:', error);
@@ -72,7 +68,6 @@ export class PermissionsGuard implements CanActivate {
     } else {
       console.log(`[Cache Hit] Data user ${user.userId} diambil dari Redis.`);
     }
-
     // 4. Validasi logic
     const menuMatch = userMenus.find((m) => m.name === requiredPermission.menu);
     if (!menuMatch || !menuMatch.actions.includes(requiredPermission.action)) {

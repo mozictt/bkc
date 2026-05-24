@@ -32,7 +32,7 @@ export class BarangController {
   }
 
   @Get()
-  @CheckPermission('view', 'Barang')
+  @CheckPermission(['create', 'manage', 'view'], 'Barang')
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
@@ -44,6 +44,7 @@ export class BarangController {
   }
 
   @Post()
+  @CheckPermission(['create', 'manage'], 'Barang')
   async create(@Body() data: CreateBarangDto) {
     return this.barangService.create(data);
   }
