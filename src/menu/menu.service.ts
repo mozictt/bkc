@@ -1,4 +1,4 @@
-import { 
+import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -10,15 +10,18 @@ import {
 import { Menu } from '@entities/menu.entity';
 import { TenantContextService } from '../common/tenant/tenant-context.service';
 import { RoleMenuPermission } from '@entities/role-menu-permissions.entity';
-import { UpdatePermissionDto } from './dto/update-permission.dto';
- 
+import { UpdatePermissionDto } from './dto/update-permission.dto'; 
+
+
 export class MenuService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly tenantContext: TenantContextService,
     @InjectRepository(RoleMenuPermission)
     private readonly permissionRepo: Repository<RoleMenuPermission>,
-  ) {}
+    @InjectRepository(Menu)
+    private readonly menuRepository: Repository<Menu>,
+  ) { }
 
   async createMenu(data: Partial<Menu>): Promise<Menu> {
     const tenantId = this.tenantContext.getTenantId();
@@ -44,7 +47,6 @@ export class MenuService {
 
   async getAllMenus(): Promise<Menu[]> {
     const tenantId = this.tenantContext.getTenantId();
-
     const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
@@ -54,8 +56,8 @@ export class MenuService {
     if (tenantId) {
       qb.andWhere('menu.tenantId = :tenantId', { tenantId });
     }
-
-    qb.orderBy('menu.order_no', 'ASC');
+    qb.andWhere('menu.parent is null '); 
+    qb.orderBy('menu.name', 'ASC');
 
     return qb.getMany();
   }

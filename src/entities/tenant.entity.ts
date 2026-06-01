@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('tenants')
 export class Tenant {
@@ -8,6 +15,7 @@ export class Tenant {
   @Column({ unique: true })
   name: string;
 
+  @Index({ unique: true })
   @Column({ unique: true })
   slug: string;
 

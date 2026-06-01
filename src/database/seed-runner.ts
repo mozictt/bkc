@@ -2,7 +2,7 @@
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
 import { Menu } from '../entities/menu.entity';
-import { Role } from '../entities/role.entity';
+import { Role } from '../role/entities/role.entity';
 import { RoleMenuPermission } from '../entities/role-menu-permissions.entity';
 import { runMenuSeed } from './seeds/menu-role.seeder';
 import { Tenant } from '../entities/tenant.entity';

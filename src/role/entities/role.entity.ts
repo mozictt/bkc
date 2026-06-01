@@ -9,9 +9,9 @@ import {
   UpdateDateColumn,
   JoinTable,
 } from 'typeorm';
-import { TenantBaseEntity } from './tenant-base.entity';
-import { RoleMenuPermission } from './role-menu-permissions.entity';
-import { Menu } from './menu.entity';
+import { TenantBaseEntity } from '../../entities/tenant-base.entity';
+import { RoleMenuPermission } from '../../entities/role-menu-permissions.entity';
+import { Menu } from '../../entities/menu.entity';
 
 @Entity('roles')
 export class Role extends TenantBaseEntity {

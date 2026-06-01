@@ -69,7 +69,8 @@ export abstract class BaseTenantService<T> {
 
   async findOneById(id: any): Promise<T> {
     const role = this.tenantService.getRole();
-    const whereClause: any = { id };
+    const whereClause: any = { id }; 
+    // console.log(role);
 
     // Jika bukan Super Admin, paksa filter berdasarkan tenantId
     if (role !== 'Super Admin') {
@@ -77,6 +78,7 @@ export abstract class BaseTenantService<T> {
     }
 
     const data = await this.repository.findOneBy(whereClause);
+    // console.log(data);
     
     if (!data) throw new NotFoundException(`${this.alias} tidak ditemukan`);
     return data;

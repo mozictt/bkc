@@ -20,7 +20,7 @@ export class PermissionsGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermission = this.reflector.get<{
-      action: string;
+      action: string | string[]; // Diubah agar bisa menerima array
       menu: string;
     }>('permission', context.getHandler());
 
@@ -39,8 +39,7 @@ export class PermissionsGuard implements CanActivate {
     // ioredis mengembalikan string, jadi kita perlu parse JSON
     const cachedData = await this.redis.get(cacheKey);
     let userMenus: any[] | null = cachedData ? JSON.parse(cachedData) : null;
-    console.log(userMenus);
-
+    // console.log(userMenus);
 
     // 2. Jika Cache Miss
     if (!userMenus) {
@@ -68,13 +67,33 @@ export class PermissionsGuard implements CanActivate {
     } else {
       console.log(`[Cache Hit] Data user ${user.userId} diambil dari Redis.`);
     }
-    // 4. Validasi logic
+    // 1. Ambil data menu yang cocok dari user
     const menuMatch = userMenus.find((m) => m.name === requiredPermission.menu);
-    if (!menuMatch || !menuMatch.actions.includes(requiredPermission.action)) {
+
+    // 2. WAJIB CEK: Jika menu tidak terdaftar sama sekali untuk user ini
+    if (!menuMatch) {
       throw new ForbiddenException(
-        `Akses ditolak untuk menu ${requiredPermission.menu}`,
+        `Akses ditolak. Anda tidak memiliki akses ke menu ${requiredPermission.menu}`,
       );
     }
+
+    // 3. Normalisasi agar requiredActions SELALU berbentuk Array
+    const requiredActions = Array.isArray(requiredPermission.action)
+      ? requiredPermission.action
+      : [requiredPermission.action];
+
+    // 4. Cek apakah ada salah satu action yang dimiliki oleh user (OR logic)
+    const hasValidAction = requiredActions.some(
+      (action) => menuMatch.actions && menuMatch.actions.includes(action),
+    );
+
+    if (!hasValidAction) {
+      throw new ForbiddenException(
+        `Akses ditolak untuk menu ${requiredPermission.menu} (Action tidak sesuai)`,
+      );
+    }
+
+    return true;
 
     return true;
   }

@@ -19,6 +19,7 @@ export class UsersService {
       where: { username },
       relations: [
         'role',
+        'tenant',
         'role.permissions',
         'role.permissions.menu',
         'role.permissions.menu.parent',
@@ -32,6 +33,7 @@ export class UsersService {
       where: { id },
       relations: [
         'role',
+        'tenant',
         'role.permissions',
         'role.permissions.menu',
         'role.permissions.menu.parent',

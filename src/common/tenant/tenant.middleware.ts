@@ -9,15 +9,17 @@ export class TenantMiddleware implements NestMiddleware {
   use(req: any, res: any, next: () => void) {
     const authHeader = req.headers.authorization;
     let tenantId = null;
+    let slug = null;
     let role = null;
 
     if (authHeader) {
       try {
         const token = authHeader.split(' ')[1];
         if (token) {
-          const decoded: any = jwt.decode(token);
+          const decoded: any = jwt.decode(token);  
           tenantId = decoded?.tenantId || null;
-          role = decoded?.role; // Ambil role dari payload JWT
+          slug = decoded?.slug || null; 
+          role = decoded?.role_id; // Ambil role dari payload JWT
         }
       } catch (error) {
         console.error(
@@ -27,7 +29,7 @@ export class TenantMiddleware implements NestMiddleware {
       }
     }
 
-    this.tenantService.run(tenantId, role, () => {
+    this.tenantService.run(tenantId,slug, role, () => {
       next();
     });
   }

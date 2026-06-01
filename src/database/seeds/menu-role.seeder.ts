@@ -1,6 +1,6 @@
 import { DataSource } from 'typeorm';
 import { Menu } from '../../entities/menu.entity';
-import { Role } from '../../entities/role.entity';
+import { Role } from '../../role/entities/role.entity';
 import { RoleMenuPermission } from '../../entities/role-menu-permissions.entity';
 import { MenuAction } from '../../entities/enums/menu-action.enum';
 

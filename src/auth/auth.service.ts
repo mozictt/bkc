@@ -28,7 +28,7 @@ export class AuthService {
   //   return null;
   // }
   async validateUser(username: string, password: string) {
-    const user = await this.userService.findByUsername(username);
+    const user = await this.userService.findByUsername(username); 
     if (user && (await bcrypt.compare(password, user.password))) {
       return user; // sudah termasuk role & menus
     }
@@ -46,7 +46,7 @@ export class AuthService {
   //   return { accessToken, refreshToken };
   // }
   async login(user: any) {
-    // console.log(user);
+    // console.log(user.role?.permissions);
     const menus = mapMenus(user.role?.permissions);
 
     const payload = {
@@ -54,6 +54,7 @@ export class AuthService {
       username: user.username,
       tenantId: user.tenantId, // 👈 Masukkan tenantId ke JWT 
       role_id: user.role?.id,
+      slug: user.tenant.slug,
       // menus, // optional kalau mau masuk JWT
     };
 
@@ -75,6 +76,7 @@ export class AuthService {
         role: user.role?.name,
         id_role: user.role?.id,
         tenantId: user.tenantId, // 👈 Return tenantId ke client
+        tenant: user.tenant, // 👈 Return tenantId ke client
         menus,
       },
       accessToken,
@@ -125,6 +127,7 @@ export class AuthService {
       username: user.username,
       tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
       role: user.role?.name,
+      slug: user.tenant.slug,
       // menus: this.mapMenus(user.role?.permissions),
     };
 

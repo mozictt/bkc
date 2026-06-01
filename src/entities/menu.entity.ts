@@ -10,7 +10,7 @@ import {
   JoinColumn,
   Relation,
 } from 'typeorm';
-import { Role } from './role.entity';
+import { Role } from '../role/entities/role.entity';
 import { RoleMenuPermission } from './role-menu-permissions.entity';
 import { TenantBaseEntity } from './tenant-base.entity';
 

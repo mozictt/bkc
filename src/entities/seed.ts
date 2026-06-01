@@ -2,7 +2,7 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import { runSeeders, SeederOptions } from 'typeorm-extension';
 import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
-import { Role } from '../entities/role.entity';
+import { Role } from '../role/entities/role.entity';
 import { Menu } from '../entities/menu.entity';
 import { RoleMenuPermission } from './role-menu-permissions.entity';
 import TenantSeeder from '../seeds/tenant.seeder';

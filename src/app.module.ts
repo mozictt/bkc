@@ -10,8 +10,9 @@ import { CommonModule } from './common/common.module';
 import { MenuModule } from './menu/menu.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
-import { TenantMiddleware } from './common/tenant/tenant.middleware'; 
+import { TenantMiddleware } from './common/tenant/tenant.middleware';
 import { RedisModule } from '@nestjs-modules/ioredis';
+import { RoleModule } from './role/role.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -66,6 +67,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
     MenuModule,
     KategoriModule,
     CommonModule,
+    RoleModule,
   ],
   providers: [
     {
