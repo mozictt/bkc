@@ -6,14 +6,19 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  constructor(private reflector: Reflector) {
+  constructor(
+    private reflector: Reflector,
+    @InjectRedis() private readonly redis: Redis,
+  ) {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -23,7 +28,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true; // skip auth
     }
 
-    return super.canActivate(context);
+    const request = context.switchToHttp().getRequest();
+    const authHeader = request.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      
+      // Cek apakah token ada di blacklist (Redis)
+      const isBlacklisted = await this.redis.get(`blacklist_token:${token}`);
+      if (isBlacklisted) {
+        throw new UnauthorizedException({
+          success: false,
+          message: 'Token sudah tidak berlaku (Logged out)',
+        });
+      }
+    }
+
+    return (await super.canActivate(context)) as boolean;
   }
 
   handleRequest(err: any, user: any, info: any) {

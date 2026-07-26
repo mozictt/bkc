@@ -38,25 +38,6 @@ import { RoleModule } from './role/role.module';
         // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         autoLoadEntities: true,
         synchronize: true,
-        define: {
-          hooks: {
-            beforeFind: (options) => {
-              const tenantId = getTenantId();
-              if (tenantId) {
-                options.where = {
-                  ...(options.where || {}),
-                  tenantId,
-                };
-              }
-            },
-            beforeCreate: (instance) => {
-              const tenantId = getTenantId();
-              if (tenantId) {
-                instance.set('tenantId', tenantId);
-              }
-            },
-          },
-        },
       }),
       inject: [ConfigService],
     }),

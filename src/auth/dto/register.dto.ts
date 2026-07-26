@@ -12,4 +12,8 @@ export class RegisterDto {
   @IsNotEmpty()
   @IsNumber()
   id_role: number;
+
+  @IsNotEmpty()
+  @IsString()
+  tenantId: string;
 }

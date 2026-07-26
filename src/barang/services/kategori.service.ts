@@ -66,10 +66,11 @@ export class KategoriService extends BaseTenantService<KategoriBarang> {
 
   /**
    * Membuat kategori baru
-   * tenantId akan diisi OTOMATIS oleh TenantSubscriber
+   * tenantId akan diisi otomatis melalui payload defensif
    */
   async create(dto: CreateKategoriDto) {
-    const kategori = this.repo.create(dto);
+    const payload = { ...dto, tenantId: this.tenantId };
+    const kategori = this.repo.create(payload);
     return this.handleSave(kategori);
   }
 

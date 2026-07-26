@@ -113,7 +113,7 @@ export class RoleService {
       // console.log(newPermissions);
 
       // 6. Gabungkan dan Simpan ke Database
-      role.permissions = [...role.permissions, ...newPermissions];
+      role.permissions = [...role.permissions, ...(newPermissions as any)];
       // console.log(role.permissions);
       // return false;
 

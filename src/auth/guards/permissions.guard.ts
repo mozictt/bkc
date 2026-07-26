@@ -16,7 +16,7 @@ export class PermissionsGuard implements CanActivate {
     private reflector: Reflector,
     @InjectRedis() private readonly redis: Redis, // Inject Redis langsung
     private userService: UsersService,
-  ) {}
+  ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermission = this.reflector.get<{
@@ -69,6 +69,7 @@ export class PermissionsGuard implements CanActivate {
     }
     // 1. Ambil data menu yang cocok dari user
     const menuMatch = userMenus.find((m) => m.name === requiredPermission.menu);
+    console.log(userMenus);
 
     // 2. WAJIB CEK: Jika menu tidak terdaftar sama sekali untuk user ini
     if (!menuMatch) {

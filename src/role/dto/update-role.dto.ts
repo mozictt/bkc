@@ -11,18 +11,7 @@ class PermissionDto {
   actions: string[];
 }
 
-export class CreateRoleDto {
-  @IsString()
-  @IsNotEmpty()
-  name: string;
+import { PartialType } from '@nestjs/mapped-types';
+import { CreateRoleDto } from './create-role.dto';
 
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsArray()
-  @IsOptional()
-  @ValidateNested({ each: true })
-  @Type(() => PermissionDto)
-  permissions?: PermissionDto[];
-}
+export class UpdateRoleDto extends PartialType(CreateRoleDto) {}

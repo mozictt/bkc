@@ -60,7 +60,7 @@ export class UsersService {
       menus: formattedMenus,
     };
   }
-  async updateRefreshToken(userId: number, token: string) {
+  async updateRefreshToken(userId: number, token: string | null) {
     await this.userRepo.update(userId, { refreshToken: token });
   }
 

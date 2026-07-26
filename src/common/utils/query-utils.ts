@@ -1,5 +1,5 @@
 // src/common/utils/query-utils.ts
-
+import { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 export function tenantLeftJoin<T extends ObjectLiteral>(
   query: SelectQueryBuilder<T>,
   property: string,

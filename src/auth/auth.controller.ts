@@ -1,9 +1,8 @@
-// src/auth/auth.controller.ts
-import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-// import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '@auth/public.decorator';
 
 @Controller('auth')
@@ -28,10 +27,18 @@ export class AuthController {
     return this.authService.refresh(body.userId, body.refreshToken);
   }
 
-  // @UseGuards(AuthGuard('jwt'))
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     // console.log(registerDto );
     return this.authService.register(registerDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Req() req: any) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader ? authHeader.split(' ')[1] : '';
+    // Req.user didapat dari token JWT
+    return this.authService.logout(req.user.userId, token);
   }
 }

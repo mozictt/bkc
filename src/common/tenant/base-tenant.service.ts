@@ -1,9 +1,9 @@
 // src/common/base/base-tenant.service.ts
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { NotFoundException } from '@nestjs/common';
 
-export abstract class BaseTenantService<T> {
+export abstract class BaseTenantService<T extends ObjectLiteral> {
   constructor(
     protected readonly repository: Repository<T>,
     protected readonly tenantService: TenantContextService,

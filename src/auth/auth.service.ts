@@ -10,7 +10,8 @@ import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
 import { mapMenus } from '@common/utils/menu.util';
-import { exit } from 'process';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private userService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   // async validateUser(username: string, password: string) {
@@ -171,6 +173,33 @@ export class AuthService {
       tenantId, // 👈 Kirim tenantId ke service user
     );
     return { message: 'Registrasi berhasil', userId: user.id };
+  }
+
+  async logout(userId: number, token: string) {
+    // 1. Cabut hak refresh token dengan mengatur nilainya menjadi null
+    await this.userService.updateRefreshToken(userId, null);
+
+    // 2. Hapus cache permission user di Redis agar bersih dan aman
+    await this.redis.del(`user_menus:${userId}`);
+
+    // 3. Masukkan access token ke Blacklist Redis
+    try {
+      const decoded: any = this.jwtService.decode(token);
+      if (decoded && decoded.exp) {
+        const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
+        if (expiresIn > 0) {
+          // Masukkan ke blacklist, akan auto-expire sesuai sisa waktu token
+          await this.redis.set(`blacklist_token:${token}`, 'true', 'EX', expiresIn);
+        }
+      }
+    } catch (error) {
+      // Abaikan jika token gagal di-decode
+    }
+
+    return {
+      success: true,
+      message: 'Logout berhasil. Sesi, token, dan cache telah dihapus.',
+    };
   }
 
   // private mapMenus(permissions: any[]): any[] {

@@ -19,9 +19,14 @@ export class TenantInterceptor implements NestInterceptor {
     if (tenantId) {
       // Jalankan request di dalam context AsyncLocalStorage
       return new Observable((observer) => {
-        return this.tenantContextService.run(String(tenantId), () => {
-          return next.handle().subscribe(observer);
-        });
+        return this.tenantContextService.run(
+          String(tenantId),
+          user?.slug || null,
+          user?.role || null,
+          () => {
+            return next.handle().subscribe(observer);
+          },
+        );
       });
     }
 

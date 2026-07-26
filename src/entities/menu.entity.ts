@@ -34,6 +34,9 @@ export class Menu extends TenantBaseEntity {
   @Column({ default: true })
   is_active: boolean;
 
+  @Column({ default: true })
+  is_visible: boolean;
+
   @ManyToOne(() => Menu, (menu) => menu.children, {
     nullable: true,
     onDelete: 'CASCADE',

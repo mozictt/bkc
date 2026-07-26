@@ -32,7 +32,7 @@ export class BarangController {
   }
 
   @Get()
-  @CheckPermission([ 'manage', 'view'], 'Barang')
+  @CheckPermission(['manage', 'view'], 'Barang')
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,

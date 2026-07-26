@@ -25,10 +25,6 @@ export class User extends TenantBaseEntity {
   @JoinColumn({ name: 'role_id' }) // FK: role_id
   role: Role;
 
-  @ManyToOne(() => Tenant)
-  @JoinColumn({ name: 'tenant_id' }) // Sesuaikan dengan nama kolom foreign key asli di tabel users DB kamu
-  tenant: Tenant;
-
-  @Column({ nullable: true })
-  refreshToken: string;
+  @Column({ type: 'varchar', nullable: true })
+  refreshToken: string | null;
 }
