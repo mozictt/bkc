@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '@auth/jwt-auth.guard';
 import { TenantMiddleware } from './common/tenant/tenant.middleware';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
+import { GalleryModule } from './gallery/gallery.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -49,6 +50,7 @@ import { RoleModule } from './role/role.module';
     KategoriModule,
     CommonModule,
     RoleModule,
+    GalleryModule,
   ],
   providers: [
     {

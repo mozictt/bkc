@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  StreamableFile,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable, map } from 'rxjs';
@@ -19,6 +20,11 @@ export class ResponseInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
+        // Jangan bungkus jika yang di-return adalah StreamableFile (Gambar/Video/Dokumen)
+        if (data instanceof StreamableFile) {
+          return data;
+        }
+
         return {
           success: true,
           statusCode,
