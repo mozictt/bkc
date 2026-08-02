@@ -55,7 +55,7 @@ export class GalleryController {
         },
       }),
       limits: {
-        fileSize: 50 * 1024 * 1024, // 50MB max per file
+        fileSize: 500 * 1024 * 1024, // 500MB max per file
       },
       fileFilter: (req, file, cb) => {
         // Validasi ganda: Ekstensi dan MIME Type untuk mencegah Spoofing

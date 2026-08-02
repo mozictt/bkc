@@ -20,11 +20,29 @@ async function bootstrap() {
   //   allowedHeaders: 'Content-Type, Authorization',
   //   credentials: true, // kalau pakai cookie / auth header
   // });
+  // Keamanan CORS Best Practice
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['http://localhost:3000'];
+
   app.enableCors({
-    origin: 'http://localhost:3000', // ganti dengan domain frontend kamu
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // method yang diizinkan
-    allowedHeaders: 'Content-Type, Authorization', // header yang diizinkan
-    credentials: true, // kalau pakai cookie / JWT di header
+    origin: (origin, callback) => {
+      // 1. Izinkan akses jika tidak ada origin (Postman, S2S, Mobile App native)
+      if (!origin) return callback(null, true);
+
+      // 2. Cek apakah origin cocok dengan whitelist (termasuk Cloudflare tunnel saat dev)
+      const isAllowed = allowedOrigins.includes(origin) || 
+                        (process.env.NODE_ENV !== 'production' && origin.endsWith('.trycloudflare.com'));
+
+      if (isAllowed) {
+        callback(null, true); // Aman, lolos
+      } else {
+        callback(new Error('Akses diblokir oleh sistem keamanan CORS')); // Blokir hacker
+      }
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+    credentials: true,
   });
 
   await app.listen(process.env.PORT ?? 3000);
