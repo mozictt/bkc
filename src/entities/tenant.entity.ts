@@ -22,6 +22,12 @@ export class Tenant {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ nullable: true })
+  email: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expiredAt: Date;
+
   @CreateDateColumn()
   createdAt: Date;
 

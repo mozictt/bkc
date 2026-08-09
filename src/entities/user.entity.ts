@@ -32,4 +32,7 @@ export class User extends TenantBaseEntity {
 
   @Column({ type: 'varchar', nullable: true })
   refreshToken: string | null;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  is_active: boolean;
 }

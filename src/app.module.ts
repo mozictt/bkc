@@ -15,7 +15,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { PermissionsModule } from './permissions/permissions.module';
-
+import { TenantsModule } from './tenants/tenants.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -50,6 +50,7 @@ import { PermissionsModule } from './permissions/permissions.module';
     RoleModule,
     GalleryModule,
     PermissionsModule,
+    TenantsModule,
   ],
   providers: [
     {

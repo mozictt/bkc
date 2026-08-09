@@ -35,6 +35,7 @@ export class MenuController {
   }
 
   @Get('role/:id')
+  // @RequirePermission('Role', 'view') // Pastikan hanya role dengan akses view Role/Permission yang bisa mengambil ini
   findAllByRoleId(@Param('id', ParseIntPipe) id: number) {
     return this.menuService.getAllMenusByRoleId(id);
   }

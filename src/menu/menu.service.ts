@@ -1,5 +1,6 @@
 import {
   NotFoundException,
+  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DataSource, Repository, In } from 'typeorm';
@@ -29,7 +30,16 @@ export class MenuService {
     await queryRunner.startTransaction();
 
     try {
-      const payload = tenantId ? { ...data, tenantId } : data;
+      const { parent_id, ...rest } = data;
+      const payload: any = tenantId ? { ...rest, tenantId } : { ...rest };
+
+      if (parent_id) {
+        const parentMenu = await queryRunner.manager.findOneBy(Menu, { id: parent_id });
+        if (parentMenu) {
+          payload.parent = parentMenu;
+        }
+      }
+
       const menu = queryRunner.manager.create(Menu, payload);
       await queryRunner.manager.save(Menu, menu);
       await queryRunner.commitTransaction();
@@ -63,7 +73,7 @@ export class MenuService {
     const tenantId = explicitTenantId || this.tenantContext.getTenantId();
 
     try {
-      // 1. Get all resources allowed for this role
+      // 1. Get all resources assigned to this role
       const permissions = await this.permissionRepo.find({
         where: {
           role: { id },
@@ -71,9 +81,7 @@ export class MenuService {
         },
       });
 
-      const allowedResources = permissions.map(p => p.resource);
-
-      // 2. Query Menus
+      // 2. Query ALL Menus (tanpa filter allowedResources agar bisa digunakan untuk Role Management UI)
       const qb = this.dataSource
         .getRepository(Menu)
         .createQueryBuilder('menu')
@@ -84,31 +92,24 @@ export class MenuService {
         qb.andWhere('menu.tenantId = :tenantId', { tenantId });
       }
 
-      // Filter menus: requiredResource IS NULL (public) OR requiredResource IN (allowedResources)
-      if (allowedResources.length > 0) {
-        qb.andWhere('(menu.requiredResource IS NULL OR menu.requiredResource IN (:...allowedResources))', { allowedResources });
-      } else {
-        qb.andWhere('menu.requiredResource IS NULL');
-      }
-
       qb.orderBy('parent.id', 'ASC', 'NULLS FIRST')
         .addOrderBy('menu.order_no', 'ASC');
 
       const flatMenus = await qb.getMany();
       
-      // Inject actions into menu based on permissions
-      const flatMenusWithActions = flatMenus.map(menu => {
-        let actions: string[] = [];
+      // 3. Inject accessLevel into menu based on permissions
+      const flatMenusWithPermissions = flatMenus.map(menu => {
+        let accessLevel = null;
         if (menu.requiredResource) {
           const perm = permissions.find(p => p.resource === menu.requiredResource);
           if (perm && perm.accessLevel) {
-             actions = AccessLevelMapping[perm.accessLevel] || [];
+             accessLevel = perm.accessLevel;
           }
         }
-        return { ...menu, actions };
+        return { ...menu, accessLevel };
       });
 
-      return this.buildMenuTree(flatMenusWithActions);
+      return this.buildMenuTree(flatMenusWithPermissions);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Gagal mengambil data menu');
@@ -127,7 +128,7 @@ export class MenuService {
         url: menu.url,
         order_no: menu.order_no,
         is_visible: menu.is_visible,
-        actions: menu.actions || [], 
+        accessLevel: menu.accessLevel || null, 
         children: [],
       };
       menuMap.set(menu.id, menuItem);
@@ -174,16 +175,37 @@ export class MenuService {
 
     try {
       const repo = queryRunner.manager.getRepository(Menu);
-      const menu = await repo.findOneBy({ id });
+      const menu = await repo.findOne({
+        where: { id },
+        relations: ['parent'],
+      });
       if (!menu) throw new NotFoundException('Menu not found');
 
-      const updated = repo.merge(menu, updateData);
+      const { parent_id, ...rest } = updateData;
+
+      if (parent_id !== undefined) {
+        if (parent_id === id) {
+          throw new BadRequestException('Menu tidak bisa menjadi parent untuk dirinya sendiri');
+        }
+        if (parent_id) {
+          const parentMenu = await repo.findOneBy({ id: parent_id });
+          if (!parentMenu) throw new NotFoundException('Parent menu tidak ditemukan');
+          menu.parent = parentMenu;
+        } else {
+          menu.parent = null as any;
+        }
+      }
+
+      const updated = repo.merge(menu, rest);
       await repo.save(updated);
 
       await queryRunner.commitTransaction();
       return updated;
     } catch (err) {
       await queryRunner.rollbackTransaction();
+      if (err instanceof NotFoundException || err instanceof BadRequestException) {
+        throw err;
+      }
       throw new InternalServerErrorException('Failed to update menu');
     } finally {
       await queryRunner.release();

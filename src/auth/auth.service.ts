@@ -25,6 +25,14 @@ export class AuthService {
   async validateUser(username: string, password: string) {
     const user = await this.userService.findByUsername(username); 
     if (user && (await bcrypt.compare(password, user.password))) {
+      // Cek kedaluwarsa tenant
+      if (user.tenant && user.tenant.expiredAt) {
+        const now = new Date();
+        const expiredDate = new Date(user.tenant.expiredAt);
+        if (now > expiredDate) {
+          throw new UnauthorizedException('Akses ditolak: Masa berlangganan klinik/tenant Anda sudah habis.');
+        }
+      }
       return user; 
     }
 
@@ -42,6 +50,7 @@ export class AuthService {
       tenantId: user.tenantId, 
       role_id: user.role?.id,
       slug: user.tenant?.slug,
+      tenantExpiredAt: user.tenant?.expiredAt,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -114,6 +123,7 @@ export class AuthService {
       tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
       role: user.role?.name,
       slug: user.tenant.slug,
+      tenantExpiredAt: user.tenant?.expiredAt,
       // menus: this.mapMenus(user.role?.permissions),
     };
 
