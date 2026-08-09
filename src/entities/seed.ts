@@ -4,7 +4,7 @@ import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
 import { Role } from '../role/entities/role.entity';
 import { Menu } from '../entities/menu.entity';
-import { RoleMenuPermission } from './role-menu-permissions.entity';
+import { Permission } from './permission.entity';
 import TenantSeeder from '../seeds/tenant.seeder';
 import * as dotenv from 'dotenv';
 
@@ -17,7 +17,7 @@ const options: DataSourceOptions & SeederOptions = {
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  entities: [Tenant, User, Role, Menu, RoleMenuPermission],
+  entities: [Tenant, User, Role, Menu, Permission],
   seeds: [TenantSeeder],
 };
 

@@ -14,6 +14,8 @@ import { TenantMiddleware } from './common/tenant/tenant.middleware';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
 import { GalleryModule } from './gallery/gallery.module';
+import { PermissionsModule } from './permissions/permissions.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,16 +29,12 @@ import { GalleryModule } from './gallery/gallery.module';
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        // host: config.get('DB_HOST'),
         host: config.get<string>('DB_HOST') || 'localhost',
-        // port: parseInt(config.get('DB_PORT'), 10),
         port: parseInt(config.get<string>('DB_PORT') || '5432', 10),
         username: config.get('DB_USERNAME'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
         timezone: config.get<string>('APP_TIMEZONE') || 'UTC',
-        // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
-        // entities: [User, Company, Barang, Role, Menu,KategoriBarang],
         autoLoadEntities: true,
         synchronize: true,
       }),
@@ -51,6 +49,7 @@ import { GalleryModule } from './gallery/gallery.module';
     CommonModule,
     RoleModule,
     GalleryModule,
+    PermissionsModule,
   ],
   providers: [
     {
@@ -62,7 +61,7 @@ import { GalleryModule } from './gallery/gallery.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(TenantMiddleware) // Gunakan middleware ini
-      .forRoutes('*'); // Terapkan ke semua route (atau tentukan route tertentu)
+      .apply(TenantMiddleware)
+      .forRoutes('*');
   }
 }

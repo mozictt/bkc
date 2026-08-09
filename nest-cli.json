@@ -1,6 +1,6 @@
-
 {
   "compilerOptions": {
-    "builder": "swc"
+    "builder": "swc",
+    "plugins": ["@nestjs/swagger"]
   }
 }

@@ -6,11 +6,13 @@ import { UsersModule } from '../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MenuModule } from '../menu/menu.module';
 
 @Module({
   imports: [
     UsersModule,
     ConfigModule,
+    MenuModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

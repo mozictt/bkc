@@ -1,4 +1,3 @@
-// src/auth/auth.service.ts
 import {
   Injectable,
   UnauthorizedException,
@@ -9,9 +8,9 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
-import { mapMenus } from '@common/utils/menu.util';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { MenuService } from '../menu/menu.service';
 
 @Injectable()
 export class AuthService {
@@ -20,44 +19,29 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
+    private readonly menuService: MenuService,
   ) {}
 
-  // async validateUser(username: string, password: string) {
-  //   const user = await this.userService.findByUsername(username);
-  //   if (user && (await bcrypt.compare(password, user.password))) {
-  //     return user;
-  //   }
-  //   return null;
-  // }
   async validateUser(username: string, password: string) {
     const user = await this.userService.findByUsername(username); 
     if (user && (await bcrypt.compare(password, user.password))) {
-      return user; // sudah termasuk role & menus
+      return user; 
     }
 
     return null;
   }
 
-  // async login(user: any) {
-  //   const payload = { username: user.username, sub: user.id };
-  //   const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
-  //   const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
-
-  //   await this.userService.updateRefreshToken(user.id, refreshToken);
-
-  //   return { accessToken, refreshToken };
-  // }
   async login(user: any) {
-    // console.log(user.role?.permissions);
-    const menus = mapMenus(user.role?.permissions);
+    const menus = user.role?.id 
+      ? await this.menuService.getAllMenusByRoleId(user.role.id, user.tenantId) 
+      : [];
 
     const payload = {
       sub: user.id,
       username: user.username,
-      tenantId: user.tenantId, // 👈 Masukkan tenantId ke JWT 
+      tenantId: user.tenantId, 
       role_id: user.role?.id,
-      slug: user.tenant.slug,
-      // menus, // optional kalau mau masuk JWT
+      slug: user.tenant?.slug,
     };
 
     const accessToken = this.jwtService.sign(payload, {

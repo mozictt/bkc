@@ -15,16 +15,19 @@ import { KategoriService } from '../services/kategori.service';
 import { CreateKategoriDto } from '../dto/create-kategori.dto';
 import { UpdateKategoriDto } from '../dto/update-kategori.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { PermissionsGuard } from '../../auth/guards/permissions.guard';
-import { CheckPermission } from '../../auth/decorators/permissions.decorator';
+import { PermissionGuard } from '../../permissions/guards/permission.guard';
+import { RequirePermission } from '../../permissions/decorators/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@ApiTags('Kategori')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('kategori')
 export class KategoriController {
   constructor(private readonly kategoriService: KategoriService) {}
 
   @Get()
-  @CheckPermission(['manage', 'view'], 'Kategori')
+  @RequirePermission('Kategori', 'view')
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
@@ -42,19 +45,19 @@ export class KategoriController {
   }
 
   @Get(':id')
-  @CheckPermission(['manage', 'view'], 'Kategori')
+  @RequirePermission('Kategori', 'view')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.kategoriService.findOne(id);
   }
 
   @Post()
-  @CheckPermission(['manage', 'create'], 'Kategori')
+  @RequirePermission('Kategori', 'create')
   async create(@Body() data: CreateKategoriDto) {
     return this.kategoriService.create(data);
   }
 
   @Put(':id')
-  @CheckPermission(['manage', 'update'], 'Kategori')
+  @RequirePermission('Kategori', 'update')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() data: UpdateKategoriDto,
@@ -63,7 +66,7 @@ export class KategoriController {
   }
 
   @Delete(':id')
-  @CheckPermission(['manage', 'delete'], 'Kategori')
+  @RequirePermission('Kategori', 'delete')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.kategoriService.remove(id);
     return { message: 'Kategori berhasil dihapus' };

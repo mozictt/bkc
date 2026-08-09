@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Album } from './entities/album.entity';
@@ -20,6 +20,17 @@ export class AlbumService {
   }
 
   async create(createAlbumDto: CreateAlbumDto) {
+    const existingAlbum = await this.albumRepo.findOne({
+      where: {
+        name: createAlbumDto.name,
+        ...this.getTenantFilter(),
+      },
+    });
+
+    if (existingAlbum) {
+      throw new ConflictException(`Album dengan nama '${createAlbumDto.name}' sudah ada.`);
+    }
+
     const album = this.albumRepo.create(createAlbumDto);
     return this.albumRepo.save(album);
   }
@@ -45,6 +56,20 @@ export class AlbumService {
 
   async update(id: string, updateData: Partial<CreateAlbumDto>) {
     const album = await this.findOne(id);
+
+    if (updateData.name && updateData.name !== album.name) {
+      const existingAlbum = await this.albumRepo.findOne({
+        where: {
+          name: updateData.name,
+          ...this.getTenantFilter(),
+        },
+      });
+
+      if (existingAlbum) {
+        throw new ConflictException(`Album dengan nama '${updateData.name}' sudah ada.`);
+      }
+    }
+
     this.albumRepo.merge(album, updateData);
     return this.albumRepo.save(album);
   }

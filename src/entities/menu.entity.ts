@@ -11,7 +11,6 @@ import {
   Relation,
 } from 'typeorm';
 import { Role } from '../role/entities/role.entity';
-import { RoleMenuPermission } from './role-menu-permissions.entity';
 import { TenantBaseEntity } from './tenant-base.entity';
 
 @Entity('menus')
@@ -37,6 +36,9 @@ export class Menu extends TenantBaseEntity {
   @Column({ default: true })
   is_visible: boolean;
 
+  @Column({ name: 'required_resource', type: 'varchar', nullable: true })
+  requiredResource: string;
+
   @ManyToOne(() => Menu, (menu) => menu.children, {
     nullable: true,
     onDelete: 'CASCADE',
@@ -46,7 +48,4 @@ export class Menu extends TenantBaseEntity {
 
   @OneToMany(() => Menu, (menu) => menu.parent)
   children: Menu[];
-
-  @OneToMany(() => RoleMenuPermission, (rmp) => rmp.menu)
-  permissions: Relation<RoleMenuPermission>[];
 }

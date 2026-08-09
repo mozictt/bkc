@@ -10,7 +10,7 @@ import {
   JoinTable,
 } from 'typeorm';
 import { TenantBaseEntity } from '../../entities/tenant-base.entity';
-import { RoleMenuPermission } from '../../entities/role-menu-permissions.entity';
+import { Permission } from '../../entities/permission.entity';
 import { Menu } from '../../entities/menu.entity';
 
 @Entity('roles')
@@ -24,8 +24,8 @@ export class Role extends TenantBaseEntity {
   @Column({ nullable: true })
   description: string;
 
-  @OneToMany(() => RoleMenuPermission, (rmp) => rmp.role, {
+  @OneToMany(() => Permission, (permission) => permission.role, {
     cascade: true,
   })
-  permissions: RoleMenuPermission[];
+  permissions: Permission[];
 }

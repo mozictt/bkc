@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateKategoriDto } from './create-kategori.dto';
 

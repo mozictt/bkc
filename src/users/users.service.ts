@@ -21,9 +21,6 @@ export class UsersService {
         'role',
         'tenant',
         'role.permissions',
-        'role.permissions.menu',
-        'role.permissions.menu.parent',
-        'role.permissions.menu.children',
       ],
     });
   }
@@ -35,9 +32,6 @@ export class UsersService {
         'role',
         'tenant',
         'role.permissions',
-        'role.permissions.menu',
-        'role.permissions.menu.parent',
-        'role.permissions.menu.children',
       ],
     });
   }
@@ -46,18 +40,13 @@ export class UsersService {
   async findUserWithPermissions(userId: number) {
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      relations: ['role', 'role.permissions', 'role.permissions.menu'],
+      relations: ['role', 'role.permissions'],
     });
     if (!user) return null;
-    // console.log(user);
-
-    // Gunakan fungsi mapMenus yang sudah kita buat sebelumnya untuk memformat data
-    const formattedMenus = this.mapMenus(user.role.permissions);
-    // console.log(formattedMenus);
 
     return {
       ...user,
-      menus: formattedMenus,
+      menus: [], // menus should be fetched via MenuService now
     };
   }
   async updateRefreshToken(userId: number, token: string | null) {

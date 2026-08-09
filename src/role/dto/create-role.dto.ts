@@ -1,4 +1,4 @@
-// src/role/dto/create-role.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsNotEmpty,
   IsString,
@@ -6,44 +6,43 @@ import {
   MinLength,
   IsOptional,
   IsArray,
-  IsInt,
   ValidateNested,
   IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MenuAction } from '@entities/enums/menu-action.enum';
+import { AccessLevel } from '../../permissions/constants/access-level.constant';
 
-// DTO Mini untuk mendefinisikan permission per menu
-class MenuPermissionInputDto {
-  @IsInt()
+class PermissionInputDto {
+  @ApiProperty({ example: 'example_value' })
+  @IsString()
   @IsNotEmpty()
-  menu_id: number;
+  resource: string;
 
-  // Anda bisa sesuaikan field ini dengan struktur di entity RoleMenuPermission Anda
-  // Contoh: canCreate, canRead, atau berupa string 'CREATE', 'VIEW'
-  @IsArray({ message: 'Actions harus berupa sebuah array' })
-  @IsEnum(MenuAction, {
-    each: true,
-    message: `Action harus merupakan salah satu dari nilai berikut: ${Object.values(MenuAction).join(', ')}`,
+  @ApiProperty({ example: 'example_value' })
+  @IsEnum(AccessLevel, {
+    message: `AccessLevel harus merupakan salah satu dari: ${Object.values(AccessLevel).join(', ')}`,
   })
-  actions: MenuAction[];
+  accessLevel: AccessLevel;
 }
 
 export class CreateRoleDto {
+  @ApiProperty({ example: 'Sample Name' })
   @IsString({ message: 'Nama role harus berupa teks.' })
   @IsNotEmpty({ message: 'Nama role tidak boleh kosong.' })
   @MinLength(3, { message: 'Nama role minimal 3 karakter.' })
   @MaxLength(50, { message: 'Nama role maksimal 50 karakter.' })
   name: string;
 
+  @ApiProperty({ example: 'Sample Description' })
   @IsString({ message: 'Deskripsi harus berupa teks.' })
   @IsOptional()
   @MaxLength(255, { message: 'Deskripsi maksimal 255 karakter.' })
   description?: string;
 
+  @ApiProperty({ example: [] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => MenuPermissionInputDto)
+  @Type(() => PermissionInputDto)
   @IsOptional()
-  permissions?: MenuPermissionInputDto[];
+  permissions?: PermissionInputDto[];
 }

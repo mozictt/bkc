@@ -1,14 +1,20 @@
-import { IsNumber, IsArray, IsEnum } from 'class-validator';
-import { MenuAction } from '@entities/enums/menu-action.enum';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNumber, IsString, IsEnum, IsNotEmpty } from 'class-validator';
+import { AccessLevel } from '../../permissions/constants/access-level.constant';
 
 export class UpdatePermissionDto {
-  @IsNumber() // Memastikan roleId harus angka
+  @ApiProperty({ example: 1 })
+  @IsNumber()
   roleId: number;
 
-  @IsNumber() // Memastikan menuId harus angka
-  menuId: number;
+  @ApiProperty({ example: 'example_value' })
+  @IsString()
+  @IsNotEmpty()
+  resource: string;
 
-  @IsArray()
-  @IsEnum(MenuAction, { each: true }) // Memastikan isi array hanya enum yang valid
-  actions: MenuAction[];
+  @ApiProperty({ example: 'example_value' })
+  @IsEnum(AccessLevel, {
+    message: `AccessLevel harus merupakan salah satu dari: ${Object.values(AccessLevel).join(', ')}`,
+  })
+  accessLevel: AccessLevel;
 }

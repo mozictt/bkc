@@ -5,18 +5,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Menu } from '@entities/menu.entity';
 import { Role } from '@src/role/entities/role.entity';
 import { Tenant } from '../entities/tenant.entity';
-import { RoleMenuPermission } from '@entities//role-menu-permissions.entity';
+import { Permission } from '@entities/permission.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
-
-import { DiscoveryModule } from '@nestjs/core';
-import { PermissionSeederService } from './permission-seeder.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Menu, Role, Tenant, RoleMenuPermission]),
-    DiscoveryModule,
+    TypeOrmModule.forFeature([Menu, Role, Tenant, Permission]),
   ],
   controllers: [MenuController],
-  providers: [MenuService, TenantContextService, PermissionSeederService],
+  providers: [MenuService, TenantContextService],
+  exports: [MenuService],
 })
 export class MenuModule {}

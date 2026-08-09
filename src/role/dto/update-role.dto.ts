@@ -1,16 +1,4 @@
-import { IsString, IsNotEmpty, IsArray, IsOptional, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-
-class PermissionDto {
-  @IsString()
-  @IsNotEmpty()
-  menu_id: string;
-
-  @IsArray()
-  @IsString({ each: true })
-  actions: string[];
-}
-
+import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateRoleDto } from './create-role.dto';
 

@@ -9,7 +9,6 @@ import {
   ParseIntPipe,
   Query,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { BarangService } from '../services/barang.service';
 import { Barang } from '../../entities/barang.entity';
@@ -17,39 +16,43 @@ import { CreateBarangDto } from '../dto/create-barang.dto';
 import { UpdateBarangDto } from '../dto/update-barang.dto';
 import { CreateBulkBarangDto } from '../dto/create-bulk-barang.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { CheckPermission } from '@auth/decorators/permissions.decorator';
-import { PermissionsGuard } from '@auth/guards/permissions.guard';
+import { RequirePermission } from '../../permissions/decorators/require-permission.decorator';
+import { PermissionGuard } from '../../permissions/guards/permission.guard';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
-
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@ApiTags('Barang')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('barang')
 export class BarangController {
-  constructor(private readonly barangService: BarangService) { }
+  constructor(private readonly barangService: BarangService) {}
 
   @Get(':id')
+  @RequirePermission('Barang', 'view')
   async findOne(@Param('id', ParseIntPipe) id: number): Promise<Barang> {
     return this.barangService.findOne(id);
   }
 
   @Get()
-  @CheckPermission(['manage', 'view'], 'Barang')
+  @RequirePermission('Barang', 'view')
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
     @Query('search') search = '',
-    @Query('sortBy') sortBy = 'id', // ✅ tambah
+    @Query('sortBy') sortBy = 'id',
     @Query('sortType') sortType = 'desc',
   ) {
     return this.barangService.findAll(+page, +limit, search, sortBy, sortType);
   }
 
   @Post()
-  @CheckPermission(['create', 'manage'], 'Barang')
+  @RequirePermission('Barang', 'create')
   async create(@Body() data: CreateBarangDto) {
     return this.barangService.create(data);
   }
 
   @Post('bulk')
+  @RequirePermission('Barang', 'create')
   async createBulk(@Body() body: CreateBulkBarangDto) {
     const result = await this.barangService.createBulk(body);
     return {
@@ -61,13 +64,16 @@ export class BarangController {
   }
 
   @Put(':id')
+  @RequirePermission('Barang', 'update')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() data: UpdateBarangDto,
   ) {
     return this.barangService.update(id, data);
   }
+
   @Delete(':id')
+  @RequirePermission('Barang', 'delete')
   async remove(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<{ message: string }> {

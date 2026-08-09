@@ -24,16 +24,37 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import type { Response } from 'express';
 import * as fs from 'fs';
-import { PermissionsGuard } from '@auth/guards/permissions.guard';
-import { CheckPermission } from '@auth/decorators/permissions.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
+import { PermissionGuard } from '../permissions/guards/permission.guard';
+import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
-@UseGuards(PermissionsGuard)
+@ApiTags('Gallery')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('gallery')
 export class GalleryController {
   constructor(private readonly galleryService: GalleryService) {}
 
   @Post('upload-bulk')
-  @CheckPermission(['manage', 'create'], 'Gallery')
+  @RequirePermission('Gallery', 'create')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        albumId: { type: 'string', format: 'uuid', description: 'ID Album opsional (UUID)' },
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description: 'Pilih foto atau video untuk diunggah (Max 20 file)',
+        },
+      },
+    },
+  })
   @UseInterceptors(
     FilesInterceptor('files', 20, {
       storage: diskStorage({
@@ -90,25 +111,25 @@ export class GalleryController {
   }
 
   @Get()
-  @CheckPermission(['manage', 'view'], 'Gallery')
+  @RequirePermission('Gallery', 'view')
   findAll() {
     return this.galleryService.findAll();
   }
 
   @Get(':id')
-  @CheckPermission(['manage', 'view'], 'Gallery')
+  @RequirePermission('Gallery', 'view')
   findOne(@Param('id') id: string) {
     return this.galleryService.findOne(id);
   }
 
   @Patch(':id')
-  @CheckPermission(['manage', 'update'], 'Gallery')
+  @RequirePermission('Gallery', 'update')
   update(@Param('id') id: string, @Body() updateGalleryDto: UpdateGalleryDto) {
     return this.galleryService.update(id, updateGalleryDto);
   }
 
   @Delete(':id')
-  @CheckPermission(['manage', 'delete'], 'Gallery')
+  @RequirePermission('Gallery', 'delete')
   remove(@Param('id') id: string) {
     return this.galleryService.remove(id);
   }
