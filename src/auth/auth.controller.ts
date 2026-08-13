@@ -16,7 +16,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Login berhasil, mengembalikan access token' })
   @ApiResponse({ status: 401, description: 'Kredensial tidak valid' })
   @ApiResponse({ status: 403, description: 'Akses diblokir oleh sistem keamanan CORS' })
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto, @Req() req: any) {
     try {
       const user = await this.authService.validateUser(
         loginDto.username,
@@ -25,7 +25,7 @@ export class AuthController {
       if (!user) {
         throw new UnauthorizedException('Invalid credentials');
       }
-      return await this.authService.login(user);
+      return await this.authService.login(user, req);
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
       return {
@@ -62,6 +62,6 @@ export class AuthController {
     const authHeader = req.headers.authorization;
     const token = authHeader ? authHeader.split(' ')[1] : '';
     // Req.user didapat dari token JWT
-    return this.authService.logout(req.user.userId, token);
+    return this.authService.logout(req.user.userId, token, req);
   }
 }

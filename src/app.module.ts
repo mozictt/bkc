@@ -8,19 +8,25 @@ import { BarangModule } from './barang/module/barang.module';
 import { KategoriModule } from './barang/module/kategori.module';
 import { CommonModule } from './common/common.module';
 import { MenuModule } from './menu/menu.module';
-import { APP_GUARD } from '@nestjs/core';
-import { JwtAuthGuard } from '@auth/jwt-auth.guard';
-import { TenantMiddleware } from './common/tenant/tenant.middleware';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { JwtAuthGuard } from '@auth/jwt-auth.guard';
+import { TenantMiddleware } from './common/tenant/tenant.middleware';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { ActivityLogInterceptor } from './activity-logs/interceptors/activity-log.interceptor';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+
+import { ScheduleModule } from '@nestjs/schedule';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
@@ -59,11 +65,16 @@ import { TenantsModule } from './tenants/tenants.module';
     GalleryModule,
     PermissionsModule,
     TenantsModule,
+    ActivityLogsModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActivityLogInterceptor,
     },
   ],
 })

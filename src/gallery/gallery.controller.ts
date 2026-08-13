@@ -10,8 +10,9 @@ import {
   UploadedFiles,
   ParseFilePipeBuilder,
   HttpStatus,
-  StreamableFile,
+  Req,
   Res,
+  Query,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
@@ -22,13 +23,13 @@ import { UpdateGalleryDto } from './dto/update-gallery.dto';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
 import { MulterFile } from '@common/types/multer-file.type';
-import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody, ApiHeader, ApiQuery, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('Gallery')
 @ApiBearerAuth()
@@ -101,14 +102,37 @@ export class GalleryController {
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
   }
 
-  // Endpoint untuk mengakses gambar/video dengan aman
-  // Ini otomatis dilindungi oleh JwtAuthGuard global di app.module.ts
   @Get('media/:filename')
+  @RequirePermission('Gallery', 'view')
+  @ApiHeader({
+    name: 'range',
+    required: false,
+    description: 'Header Byte Range untuk video streaming (cth: bytes=0-1048575)',
+  })
+  @ApiQuery({
+    name: 'token',
+    required: false,
+    description: 'JWT Bearer token dalam query string untuk pemutar media HTML5 native',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mengembalikan file media secara utuh (gambar atau download penuh).',
+  })
+  @ApiResponse({
+    status: 206,
+    description: 'Partial Content - Mengembalikan potongan chunk video untuk streaming.',
+  })
+  @ApiResponse({
+    status: 416,
+    description: 'Range Not Satisfiable - Byte range yang diminta melebihi ukuran file.',
+  })
   async getMedia(
     @Param('filename') filename: string,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile> {
-    return this.galleryService.streamMedia(filename, res);
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('token') token?: string,
+  ) {
+    return this.galleryService.streamMedia(filename, req, res);
   }
 
   @Get()

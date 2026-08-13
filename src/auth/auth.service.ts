@@ -12,6 +12,9 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { MenuService } from '../menu/menu.service';
 
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { sanitizePayload } from '../activity-logs/utils/sanitize-payload.util';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -20,6 +23,7 @@ export class AuthService {
     private configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
     private readonly menuService: MenuService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async validateUser(username: string, password: string) {
@@ -39,7 +43,7 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
+  async login(user: any, req?: any) {
     const menus = user.role?.id 
       ? await this.menuService.getAllMenusByRoleId(user.role.id, user.tenantId) 
       : [];
@@ -63,7 +67,34 @@ export class AuthService {
     });
 
     await this.userService.updateRefreshToken(user.id, refreshToken);
-    // console.log(user.tenantId);
+    
+    // Log aktivitas LOGIN secara dinamis dari HTTP request
+    try {
+      const path = req?.originalUrl || req?.url || '/auth/login';
+      const method = req?.method || 'POST';
+      const rawIp = req?.headers?.['x-forwarded-for'] || req?.connection?.remoteAddress || req?.ip;
+      const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+      const userAgent = req?.headers?.['user-agent'];
+
+      const bodyToLog = req?.body ? sanitizePayload(req.body) : { username: user.username, password: '***SENSITIVE***' };
+
+      await this.activityLogsService.createLog({
+        tenantId: user.tenantId || null,
+        userId: user.id,
+        username: user.username,
+        action: 'LOGIN',
+        module: 'AUTH',
+        description: `User ${user.username} berhasil login ke dalam sistem.`,
+        method: method,
+        path: path,
+        ipAddress: ipAddress ? String(ipAddress) : null,
+        userAgent: userAgent ? String(userAgent) : null,
+        body: bodyToLog,
+      });
+    } catch (e) {
+      console.error('Gagal mencatat log login:', e);
+    }
+
     return {
       user: {
         id: user.id,
@@ -169,7 +200,7 @@ export class AuthService {
     return { message: 'Registrasi berhasil', userId: user.id };
   }
 
-  async logout(userId: number, token: string) {
+  async logout(userId: number, token: string, req?: any) {
     // 1. Cabut hak refresh token dengan mengatur nilainya menjadi null
     await this.userService.updateRefreshToken(userId, null);
 
@@ -186,8 +217,28 @@ export class AuthService {
           await this.redis.set(`blacklist_token:${token}`, 'true', 'EX', expiresIn);
         }
       }
+
+      // Log aktivitas LOGOUT secara dinamis dari HTTP request
+      const path = req?.originalUrl || req?.url || '/auth/logout';
+      const method = req?.method || 'POST';
+      const rawIp = req?.headers?.['x-forwarded-for'] || req?.connection?.remoteAddress || req?.ip;
+      const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+      const userAgent = req?.headers?.['user-agent'];
+
+      await this.activityLogsService.createLog({
+        tenantId: decoded?.tenantId || null,
+        userId: userId,
+        username: decoded?.username || null,
+        action: 'LOGOUT',
+        module: 'AUTH',
+        description: `User ${decoded?.username || userId} telah keluar (logout) dari sistem.`,
+        method: method,
+        path: path,
+        ipAddress: ipAddress ? String(ipAddress) : null,
+        userAgent: userAgent ? String(userAgent) : null,
+      });
     } catch (error) {
-      // Abaikan jika token gagal di-decode
+      // Abaikan jika token gagal di-decode atau log gagal
     }
 
     return {

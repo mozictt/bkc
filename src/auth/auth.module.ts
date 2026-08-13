@@ -8,11 +8,14 @@ import { JwtStrategy } from './jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MenuModule } from '../menu/menu.module';
 
+import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
+
 @Module({
   imports: [
     UsersModule,
     ConfigModule,
     MenuModule,
+    ActivityLogsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

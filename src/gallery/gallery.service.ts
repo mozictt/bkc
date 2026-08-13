@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
 import { UpdateGalleryDto } from './dto/update-gallery.dto';
 import { Gallery } from './entities/gallery.entity';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
@@ -64,7 +64,7 @@ export class GalleryService {
     }
   }
 
-  streamMedia(filename: string, res: Response): StreamableFile {
+  streamMedia(filename: string, req: Request, res: Response) {
     // Sanitize filename to prevent Path Traversal attacks
     const sanitizedFilename = path.basename(filename);
     const filePath = path.join(this.storagePath, sanitizedFilename);
@@ -73,7 +73,9 @@ export class GalleryService {
       throw new NotFoundException('File media tidak ditemukan');
     }
 
-    const file = fs.createReadStream(filePath);
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
     
     const ext = path.extname(filename).toLowerCase();
     let contentType = 'application/octet-stream';
@@ -83,10 +85,55 @@ export class GalleryService {
     else if (ext === '.mp4') contentType = 'video/mp4';
     else if (ext === '.webm') contentType = 'video/webm';
 
-    return new StreamableFile(file, {
-      type: contentType,
-      disposition: `inline; filename="${filename}"`,
-    });
+    const MAX_CHUNK_SIZE = 3 * 1024 * 1024; // 3MB per chunk untuk responsivitas streaming & seeking
+
+    // Respons 206 Partial Content jika ada header Range dan tipe file adalah video
+    if (range && contentType.startsWith('video/')) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      
+      if (isNaN(start) || start >= fileSize || start < 0) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+
+      if (isNaN(end) || end - start + 1 > MAX_CHUNK_SIZE) {
+        end = start + MAX_CHUNK_SIZE - 1;
+      }
+
+      if (end >= fileSize) {
+        end = fileSize - 1;
+      }
+
+      if (start > end) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunkSize = end - start + 1;
+      const stream = fs.createReadStream(filePath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
+
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
+
+      fs.createReadStream(filePath).pipe(res);
+    }
   }
 
   async findAll() {
