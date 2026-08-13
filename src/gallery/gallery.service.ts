@@ -8,6 +8,7 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
+import { MulterFile } from '@common/types/multer-file.type';
 
 @Injectable()
 export class GalleryService {
@@ -25,7 +26,7 @@ export class GalleryService {
     return { tenantId: this.tenantContext.getTenantId() };
   }
 
-  async processAndSaveFiles(files: Express.Multer.File[], dto: CreateGalleryDto) {
+  async processAndSaveFiles(files: MulterFile[], dto: CreateGalleryDto) {
     if (!files || files.length === 0) {
       throw new InternalServerErrorException('Tidak ada file yang diunggah');
     }
@@ -35,7 +36,7 @@ export class GalleryService {
         const mediaType = file.mimetype.includes('video') ? 'video' : 'photo';
         
         return this.galleryRepo.create({
-          albumId: dto.albumId || null,
+          albumId: dto.albumId || undefined,
           fileName: file.filename,
           originalName: file.originalname,
           mimeType: file.mimetype,

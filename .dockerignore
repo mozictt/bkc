@@ -1,0 +1,45 @@
+# ─── Build artifacts ──────────────────────────────
+node_modules
+dist
+build
+coverage
+
+# ─── Environment files ────────────────────────────
+.env
+.env.*
+!.env.docker
+
+# ─── Development / Editor ─────────────────────────
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# ─── Testing ──────────────────────────────────────
+test
+*.spec.ts
+*.e2e-spec.ts
+jest.config.*
+jest-e2e.json
+
+# ─── TypeScript source (sudah di-compile ke dist) ─
+*.ts
+!dist/**
+
+# ─── Git ──────────────────────────────────────────
+.git
+.gitignore
+
+# ─── Docker ───────────────────────────────────────
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# ─── Dokumentasi & Tools ──────────────────────────
+README.md
+docs/
+cek_api/
+*.http
+
+# ─── Upload storage (dikelola via Docker Volume) ──
+storage/

@@ -30,16 +30,31 @@ async function bootstrap() {
     },
   });
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',') 
-    : ['http://localhost:3000', 'http://localhost:4000'];
+  // Mengambil daftar origin yang diizinkan dari environment variable
+  const rawOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost:3000', 'http://localhost:4000', 'https://dlinzi.web.id'];
+
+  if (process.env.FRONTEND_URL) {
+    rawOrigins.push(process.env.FRONTEND_URL);
+  }
+
+  // Sanitasi origin: hilangkan whitespace & trailing slash di akhir URL
+  const allowedOrigins = rawOrigins
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
 
   app.enableCors({
     origin: (origin, callback) => {
+      // Izinkan request non-browser / same-origin tanpa header Origin
       if (!origin) return callback(null, true);
 
-      const isAllowed = allowedOrigins.includes(origin) || 
-                        (process.env.NODE_ENV !== 'production' && origin.endsWith('.trycloudflare.com'));
+      const normalizedOrigin = origin.trim().replace(/\/$/, '');
+
+      const isAllowed =
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(normalizedOrigin) ||
+        (process.env.NODE_ENV !== 'production' && normalizedOrigin.endsWith('.trycloudflare.com'));
 
       if (isAllowed) {
         callback(null, true);
@@ -48,7 +63,7 @@ async function bootstrap() {
       }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Authorization',
+    allowedHeaders: 'Content-Type, Authorization, Accept, X-Requested-With, X-Tenant-ID',
     credentials: true,
   });
 

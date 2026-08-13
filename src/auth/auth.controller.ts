@@ -1,15 +1,21 @@
 import { Controller, Post, Body, UnauthorizedException, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '@auth/public.decorator';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
   @Public()
   @Post('login')
+  @ApiOperation({ summary: 'Login pengguna' })
+  @ApiResponse({ status: 200, description: 'Login berhasil, mengembalikan access token' })
+  @ApiResponse({ status: 401, description: 'Kredensial tidak valid' })
+  @ApiResponse({ status: 403, description: 'Akses diblokir oleh sistem keamanan CORS' })
   async login(@Body() loginDto: LoginDto) {
     try {
       const user = await this.authService.validateUser(
@@ -33,11 +39,15 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @ApiOperation({ summary: 'Refresh JWT Token' })
+  @ApiResponse({ status: 200, description: 'Token baru berhasil diterbitkan' })
   async refresh(@Body() body: { userId: number; refreshToken: string }) {
     return this.authService.refresh(body.userId, body.refreshToken);
   }
 
   @Post('register')
+  @ApiOperation({ summary: 'Registrasi pengguna baru' })
+  @ApiResponse({ status: 201, description: 'Pengguna berhasil didaftarkan' })
   async register(@Body() registerDto: RegisterDto) {
     // console.log(registerDto );
     return this.authService.register(registerDto);
@@ -45,6 +55,9 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout pengguna dan kurangi/hapus session' })
+  @ApiResponse({ status: 200, description: 'Logout berhasil' })
   async logout(@Req() req: any) {
     const authHeader = req.headers.authorization;
     const token = authHeader ? authHeader.split(' ')[1] : '';

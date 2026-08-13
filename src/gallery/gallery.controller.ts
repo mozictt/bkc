@@ -27,6 +27,7 @@ import * as fs from 'fs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
+import { MulterFile } from '@common/types/multer-file.type';
 import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Gallery')
@@ -95,7 +96,7 @@ export class GalleryController {
   )
   async uploadMultiple(
     @Body() createGalleryDto: CreateGalleryDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles() files: MulterFile[],
   ) {
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
   }

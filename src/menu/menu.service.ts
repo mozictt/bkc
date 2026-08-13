@@ -99,7 +99,7 @@ export class MenuService {
       
       // 3. Inject accessLevel into menu based on permissions
       const flatMenusWithPermissions = flatMenus.map(menu => {
-        let accessLevel = null;
+        let accessLevel: AccessLevel | null = null;
         if (menu.requiredResource) {
           const perm = permissions.find(p => p.resource === menu.requiredResource);
           if (perm && perm.accessLevel) {

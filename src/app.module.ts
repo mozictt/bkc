@@ -21,9 +21,17 @@ import { TenantsModule } from './tenants/tenants.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    RedisModule.forRoot({
-      type: 'single',
-      url: 'redis://localhost:6379',
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => {
+        const host = config.get<string>('REDIS_HOST') || 'localhost';
+        const port = config.get<number>('REDIS_PORT') || 6379;
+        return {
+          type: 'single',
+          url: `redis://${host}:${port}`,
+        };
+      },
+      inject: [ConfigService],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

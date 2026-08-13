@@ -1,0 +1,139 @@
+services:
+  # ─────────────────────────────────────────────────
+  # Backend NestJS Application
+  # ─────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: backend_app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      TZ: Asia/Jakarta
+      APP_TIMEZONE: Asia/Jakarta
+
+      # Database PostgreSQL (External/Host)
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+
+      # Redis Cache
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_TTL: ${REDIS_TTL:-3600}
+
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-10h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-1d}
+
+      # CORS
+      FRONTEND_URL: ${FRONTEND_URL:-https://dlinzi.web.id}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://dlinzi.web.id,http://localhost:3000,http://localhost:3001}
+    volumes:
+      # Persistent storage untuk file upload gallery
+      - app_uploads:/app/storage/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─────────────────────────────────────────────────
+  # PostgreSQL Database (Opsional - Profile: postgres)
+  # ─────────────────────────────────────────────────
+  postgres:
+    profiles:
+      - postgres
+    image: postgres:16-alpine
+    container_name: backend_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+      POSTGRES_DB: ${DB_NAME:-app}
+      TZ: Asia/Jakarta
+      PGTZ: Asia/Jakarta
+    ports:
+      # Expose ke host jika memakai postgres kontainer
+      - "${DB_PORT_EXPOSE:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-root} -d ${DB_NAME:-app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ─────────────────────────────────────────────────
+  # Redis Cache
+  # ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: backend_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1
+      --loglevel warning
+    ports:
+      # Expose ke host untuk debugging (opsional, bisa dihapus di production)
+      - "${REDIS_PORT_EXPOSE:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+# ─────────────────────────────────────────────────
+# Named Volumes — Data persisten di Docker
+# ─────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: backend_postgres_data
+  redis_data:
+    name: backend_redis_data
+  app_uploads:
+    name: backend_app_uploads
+
+# ─────────────────────────────────────────────────
+# Network — Isolasi service dalam satu network
+# ─────────────────────────────────────────────────
+networks:
+  backend_network:
+    name: backend_network
+    driver: bridge
