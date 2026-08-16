@@ -21,4 +21,9 @@ export class RegisterDto {
   @IsNotEmpty()
   @IsString()
   tenantId: string;
+
+  @ApiProperty({ example: 1, description: 'ID Pegawai yang berelasi' })
+  @IsNotEmpty({ message: 'ID Pegawai wajib diisi' })
+  @IsNumber({}, { message: 'ID Pegawai harus berupa angka' })
+  pegawaiId: number;
 }

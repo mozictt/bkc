@@ -12,6 +12,8 @@ import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { AccessLevel, AccessLevelMapping } from '../permissions/constants/access-level.constant';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 export class MenuService {
   constructor(
@@ -21,7 +23,19 @@ export class MenuService {
     private readonly permissionRepo: Repository<Permission>,
     @InjectRepository(Menu)
     private readonly menuRepository: Repository<Menu>,
+    @InjectRedis() private readonly redis: Redis,
   ) { }
+
+  private async invalidateMenuCache(): Promise<void> {
+    try {
+      const keys = await this.redis.keys('menus:*');
+      if (keys && keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (err) {
+      console.error('[MenuService] Gagal membersihkan cache menu:', err);
+    }
+  }
 
   async createMenu(data: CreateMenuDto): Promise<Menu> {
     const tenantId = this.tenantContext.getTenantId();
@@ -43,6 +57,7 @@ export class MenuService {
       const menu = queryRunner.manager.create(Menu, payload);
       await queryRunner.manager.save(Menu, menu);
       await queryRunner.commitTransaction();
+      await this.invalidateMenuCache();
       return menu;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -54,6 +69,17 @@ export class MenuService {
 
   async getAllMenus(): Promise<Menu[]> {
     const tenantId = this.tenantContext.getTenantId();
+    const cacheKey = `menus:all:${tenantId || 'global'}`;
+
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      console.error('[MenuService] Gagal mengambil cache menus:all:', err);
+    }
+
     const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
@@ -64,13 +90,37 @@ export class MenuService {
       qb.andWhere('menu.tenantId = :tenantId', { tenantId });
     }
     qb.andWhere('menu.parent is null '); 
-    qb.orderBy('menu.order_no', 'ASC');
+    qb.orderBy('menu.name', 'ASC');
 
-    return qb.getMany();
+    const menus = await qb.getMany();
+
+    menus.forEach(menu => {
+      if (menu.children && menu.children.length > 0) {
+        menu.children.sort((a, b) => a.name.localeCompare(b.name));
+      }
+    });
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(menus), 'EX', 3600);
+    } catch (err) {
+      console.error('[MenuService] Gagal menyimpan cache menus:all:', err);
+    }
+
+    return menus;
   }
 
   async getAllMenusByRoleId(id: number, explicitTenantId?: string): Promise<any[]> {
     const tenantId = explicitTenantId || this.tenantContext.getTenantId();
+    const cacheKey = `menus:role:${id}:${tenantId || 'global'}`;
+
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      console.error('[MenuService] Gagal mengambil cache menus:role:', err);
+    }
 
     try {
       // 1. Get all resources assigned to this role
@@ -93,7 +143,7 @@ export class MenuService {
       }
 
       qb.orderBy('parent.id', 'ASC', 'NULLS FIRST')
-        .addOrderBy('menu.order_no', 'ASC');
+        .addOrderBy('menu.name', 'ASC');
 
       const flatMenus = await qb.getMany();
       
@@ -109,7 +159,15 @@ export class MenuService {
         return { ...menu, accessLevel };
       });
 
-      return this.buildMenuTree(flatMenusWithPermissions);
+      const tree = this.buildMenuTree(flatMenusWithPermissions);
+
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(tree), 'EX', 3600);
+      } catch (err) {
+        console.error('[MenuService] Gagal menyimpan cache menus:role:', err);
+      }
+
+      return tree;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Gagal mengambil data menu');
@@ -145,7 +203,17 @@ export class MenuService {
       }
     });
 
-    return rootMenus.sort((a, b) => a.order_no - b.order_no);
+    // Urutkan root menus berdasarkan nama ascending
+    rootMenus.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Urutkan children dari masing-masing root menu berdasarkan nama ascending
+    rootMenus.forEach((menu) => {
+      if (menu.children && menu.children.length > 0) {
+        menu.children.sort((a, b) => a.name.localeCompare(b.name));
+      }
+    });
+
+    return rootMenus;
   }
 
   async getMenuById(id: number): Promise<Menu> {
@@ -200,6 +268,7 @@ export class MenuService {
       await repo.save(updated);
 
       await queryRunner.commitTransaction();
+      await this.invalidateMenuCache();
       return updated;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -223,6 +292,7 @@ export class MenuService {
 
       await queryRunner.manager.remove(Menu, menu);
       await queryRunner.commitTransaction();
+      await this.invalidateMenuCache();
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw new InternalServerErrorException('Failed to delete menu');
@@ -258,7 +328,9 @@ export class MenuService {
         });
       }
 
-      return await this.permissionRepo.save(permission);
+      const savedPermission = await this.permissionRepo.save(permission);
+      await this.invalidateMenuCache();
+      return savedPermission;
     } catch (unknownError: unknown) {
       if (unknownError instanceof Error) {
         console.error(unknownError.message);

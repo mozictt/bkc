@@ -101,6 +101,19 @@ export const runMenuSeed = async (dataSource: DataSource) => {
     );
   }
 
+  let pegawaiMenu = await menuRepo.findOneBy({ name: 'Pegawai Management' });
+  if (!pegawaiMenu) {
+    pegawaiMenu = await menuRepo.save(
+      menuRepo.create({
+        name: 'Pegawai Management',
+        url: '/pegawai',
+        parent: systemMgmt,
+        requiredResource: 'Pegawai',
+        order_no: 4,
+      }),
+    );
+  }
+
   // --- 2. SEED ROLES ---
   let adminRole = await roleRepo.findOne({ where: { name: 'Super Admin' } });
 
@@ -149,6 +162,16 @@ export const runMenuSeed = async (dataSource: DataSource) => {
       resource: 'Menu',
       accessLevel: AccessLevel.FULL_AKSES,
     },
+    {
+      role: adminRole,
+      resource: 'Pegawai',
+      accessLevel: AccessLevel.FULL_AKSES,
+    },
+    {
+      role: adminRole,
+      resource: 'Permission',
+      accessLevel: AccessLevel.FULL_AKSES,
+    },
 
     // Staff Permissions (Hanya View/Akses Terbatas)
     {
@@ -164,6 +187,11 @@ export const runMenuSeed = async (dataSource: DataSource) => {
     {
       role: staffRole,
       resource: 'Role',
+      accessLevel: AccessLevel.VIEW_AKSES,
+    },
+    {
+      role: staffRole,
+      resource: 'Pegawai',
       accessLevel: AccessLevel.VIEW_AKSES,
     },
   ];

@@ -7,6 +7,7 @@ import { Permission } from '../entities/permission.entity';
 import { runMenuSeed } from './seeds/menu-role.seeder';
 import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
+import { Pegawai } from '../entities/pegawai.entity';
 
 // 1. Load environment variables dari file .env
 dotenv.config();
@@ -20,7 +21,7 @@ const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   // Pastikan semua entity yang terlibat dimasukkan di sini
-  entities: [Menu, Role, Permission, Tenant, User],
+  entities: [Menu, Role, Permission, Tenant, User, Pegawai],
   synchronize: false, // Selalu false agar tidak merusak schema yang ada
   logging: true,
 });

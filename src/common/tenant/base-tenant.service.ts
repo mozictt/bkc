@@ -59,11 +59,14 @@ export abstract class BaseTenantService<T extends ObjectLiteral> {
       .getManyAndCount();
 
     return {
-      success: true,
-      currentPage: +page,
-      totalItems: total,
-      totalPages: Math.ceil(total / limit),
-      array: data,
+      items: data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: +limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: +page,
+      },
     };
   }
 

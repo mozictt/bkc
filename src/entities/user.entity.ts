@@ -6,11 +6,13 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  OneToOne,
 } from 'typeorm';
 import { Role } from '../role/entities/role.entity';
 import { TenantBaseEntity } from './tenant-base.entity';
 import { Tenant } from '@entities/tenant.entity';
 import { Permission } from './permission.entity';
+import { Pegawai } from './pegawai.entity';
 
 @Entity('users')
 export class User extends TenantBaseEntity {
@@ -35,4 +37,11 @@ export class User extends TenantBaseEntity {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   is_active: boolean;
+
+  @Column({ name: 'pegawai_id', type: 'int', unique: true, nullable: true })
+  pegawaiId: number | null;
+
+  @OneToOne(() => Pegawai, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'pegawai_id' })
+  pegawai: Pegawai | null;
 }

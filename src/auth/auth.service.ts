@@ -10,7 +10,6 @@ import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
-import { MenuService } from '../menu/menu.service';
 
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { sanitizePayload } from '../activity-logs/utils/sanitize-payload.util';
@@ -22,7 +21,6 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
-    private readonly menuService: MenuService,
     private readonly activityLogsService: ActivityLogsService,
   ) {}
 
@@ -44,10 +42,6 @@ export class AuthService {
   }
 
   async login(user: any, req?: any) {
-    const menus = user.role?.id 
-      ? await this.menuService.getAllMenusByRoleId(user.role.id, user.tenantId) 
-      : [];
-
     const payload = {
       sub: user.id,
       username: user.username,
@@ -55,6 +49,7 @@ export class AuthService {
       role_id: user.role?.id,
       slug: user.tenant?.slug,
       tenantExpiredAt: user.tenant?.expiredAt,
+      name_pegawai: user.pegawai?.name || null,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -103,32 +98,19 @@ export class AuthService {
         id_role: user.role?.id,
         tenantId: user.tenantId, // 👈 Return tenantId ke client
         tenant: user.tenant, // 👈 Return tenantId ke client
-        menus,
+        name_pegawai: user.pegawai?.name || null,
+        pegawai: user.pegawai ? {
+          id: user.pegawai.id,
+          nip: user.pegawai.nip,
+          name: user.pegawai.name,
+          email: user.pegawai.email,
+        } : null,
       },
       accessToken,
       refreshToken,
     };
   }
 
-  // async refresh(userId: number, token: string) {
-  //   const user = await this.userService.findById(userId);
-  //   // console.log('TOKEN DARI DB     :', user.refreshToken);
-  //   if (!user || user.refreshToken !== token) {
-  //     throw new UnauthorizedException('Refresh token tidak valid atau sudah expired');
-  //   }
-
-  //   const payload = { username: user.username, sub: user.id };
-  //   const accessToken = this.jwtService.sign(payload, {
-  //     expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
-  //   });
-  //   const refreshToken = this.jwtService.sign(payload, {
-  //     expiresIn:
-  //       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
-  //   });
-
-  //   await this.userService.updateRefreshToken(user.id, refreshToken);
-  //   return { accessToken, refreshToken };
-  // }
   async refresh(userId: number, token: string) {
     const user = await this.userService.findById(userId);
 
@@ -155,7 +137,7 @@ export class AuthService {
       role: user.role?.name,
       slug: user.tenant.slug,
       tenantExpiredAt: user.tenant?.expiredAt,
-      // menus: this.mapMenus(user.role?.permissions),
+      name_pegawai: user.pegawai?.name || null,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -171,10 +153,9 @@ export class AuthService {
 
     return { accessToken, refreshToken };
   }
+
   async register(registerDto: RegisterDto) {
-    //  console.log('registerDto:', registerDto); // tampilkan isi registerDto
-    // return;
-    const { username, password, id_role, tenantId } = registerDto;
+    const { username, password, id_role, tenantId, pegawaiId } = registerDto;
     // Cek jika user sudah ada
     const existingUser = await this.userService.findByUsername(username);
     if (existingUser) {
@@ -195,7 +176,8 @@ export class AuthService {
       username,
       hashedPassword,
       id_role,
-      tenantId, // 👈 Kirim tenantId ke service user
+      tenantId,
+      pegawaiId, // 👈 Teruskan pegawaiId ke service user
     );
     return { message: 'Registrasi berhasil', userId: user.id };
   }
@@ -253,59 +235,4 @@ export class AuthService {
       message: 'Logout berhasil. Sesi, token, dan cache telah dihapus.',
     };
   }
-
-  // private mapMenus(permissions: any[]): any[] {
-  //   const flatMenus =
-  //     permissions
-  //       ?.map((p: any) => {
-  //         // Logika default action: jika null/undefined/kosong, isi dengan ["view"]
-  //         const sanitizedActions =
-  //           p.actions && p.actions.length > 0 ? p.actions : ['view'];
-
-  //         return {
-  //           id: p.menu?.id,
-  //           parentId: p.menu?.parent?.id || null,
-  //           name: p.menu?.name,
-  //           path: p.menu?.url,
-  //           icon: p.menu?.icon,
-  //           order_no: p.menu?.order_no || 0,
-  //           actions: sanitizedActions, // Gunakan hasil sanitasi
-  //         };
-  //       })
-  //       .filter((m) => m.id) || [];
-
-  //   const menuMap = new Map();
-  //   const tree: any[] = [];
-
-  //   // Buat map untuk akses cepat
-  //   flatMenus.forEach((item) => {
-  //     menuMap.set(item.id, { ...item, children: [] });
-  //   });
-
-  //   // Susun hirarki
-  //   flatMenus.forEach((item) => {
-  //     const node = menuMap.get(item.id);
-  //     if (item.parentId && menuMap.has(item.parentId)) {
-  //       menuMap.get(item.parentId).children.push(node);
-  //     } else {
-  //       tree.push(node);
-  //     }
-  //   });
-
-  //   // Urutkan berdasarkan order_no
-  //   const finalTree = tree.sort((a, b) => a.order_no - b.order_no);
-
-  //   // Pastikan menu Home ada di paling atas
-  //   if (!finalTree.some((m) => m.path === '/')) {
-  //     finalTree.unshift({
-  //       name: 'Home',
-  //       path: '/',
-  //       icon: 'home',
-  //       actions: ['view'], // Sebaiknya Home juga diberi 'view' agar konsisten
-  //       children: [],
-  //     });
-  //   }
-
-  //   return finalTree;
-  // }
 }

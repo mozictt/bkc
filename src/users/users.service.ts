@@ -8,29 +8,39 @@ import {
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
+import { Pegawai } from '../entities/pegawai.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(Pegawai)
+    private pegawaiRepo: Repository<Pegawai>,
     private tenantContext: TenantContextService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async findByUsername(username: string) {
     return this.userRepo.findOne({
       where: { username },
-      relations: ['role', 'tenant', 'role.permissions'],
+      relations: ['role', 'tenant', 'role.permissions', 'pegawai'],
     });
   }
 
   async findById(id: number) {
     return this.userRepo.findOne({
       where: { id },
-      relations: ['role', 'tenant', 'role.permissions'],
+      relations: ['role', 'tenant', 'role.permissions', 'pegawai'],
     });
   }
 
@@ -56,12 +66,30 @@ export class UsersService {
     passwordHash: string,
     id_role: number,
     tenantId: string,
+    pegawaiId: number,
   ) {
+    // 1. Validasi apakah Pegawai ada di tenant yang sama
+    const pegawai = await this.pegawaiRepo.findOne({
+      where: { id: pegawaiId, tenantId: tenantId ? tenantId : undefined },
+    });
+    if (!pegawai) {
+      throw new NotFoundException(`Pegawai dengan ID #${pegawaiId} tidak ditemukan.`);
+    }
+
+    // 2. Validasi apakah Pegawai sudah dikaitkan dengan akun user lain
+    const existingUser = await this.userRepo.findOne({
+      where: { pegawaiId },
+    });
+    if (existingUser) {
+      throw new ConflictException(`Pegawai "${pegawai.name}" sudah memiliki akun user.`);
+    }
+
     const user = this.userRepo.create({
       username,
       password: passwordHash,
       role: { id: id_role },
       tenantId,
+      pegawaiId,
       is_active: true,
     });
     return this.userRepo.save(user);
@@ -76,6 +104,7 @@ export class UsersService {
     const queryBuilder = this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.pegawai', 'pegawai')
       .select([
         'user.id',
         'user.username',
@@ -85,6 +114,10 @@ export class UsersService {
         'role.id',
         'role.name',
         'role.description',
+        'pegawai.id',
+        'pegawai.nip',
+        'pegawai.name',
+        'pegawai.email',
       ]);
 
     if (tenantId) {
@@ -121,6 +154,7 @@ export class UsersService {
     const queryBuilder = this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.pegawai', 'pegawai')
       .select([
         'user.id',
         'user.username',
@@ -130,6 +164,10 @@ export class UsersService {
         'role.id',
         'role.name',
         'role.description',
+        'pegawai.id',
+        'pegawai.nip',
+        'pegawai.name',
+        'pegawai.email',
       ]);
 
     if (tenantId) {
@@ -216,6 +254,7 @@ export class UsersService {
     }
 
     const savedUser = await this.userRepo.save(user);
+    await this.deleteProfileCache(id);
 
     // Sanitasi data output
     const { password, refreshToken, ...result } = savedUser;
@@ -241,6 +280,7 @@ export class UsersService {
 
     user.is_active = isActive;
     await this.userRepo.save(user);
+    await this.deleteProfileCache(id);
 
     return {
       success: true,
@@ -269,6 +309,7 @@ export class UsersService {
     }
 
     await this.userRepo.softRemove(user);
+    await this.deleteProfileCache(id);
 
     return {
       success: true,
@@ -301,6 +342,7 @@ export class UsersService {
     user.refreshToken = null; // Cabut sesi aktif user
 
     await this.userRepo.save(user);
+    await this.deleteProfileCache(id);
 
     return {
       success: true,
@@ -363,4 +405,110 @@ export class UsersService {
 
     return finalTree;
   } 
+
+  async deleteProfileCache(userId: number) {
+    const cacheKey = `user_profile:${userId}`;
+    await this.redis.del(cacheKey);
+  }
+
+  async getProfile(userId: number) {
+    const cacheKey = `user_profile:${userId}`;
+    const cachedProfile = await this.redis.get(cacheKey);
+    if (cachedProfile) {
+      return JSON.parse(cachedProfile);
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['role', 'tenant', 'pegawai'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Pengguna dengan ID #${userId} tidak ditemukan.`);
+    }
+
+    // Hapus data sensitif
+    delete user.password;
+    delete user.refreshToken;
+
+    await this.redis.set(cacheKey, JSON.stringify(user), 'EX', 3600);
+
+    return user;
+  }
+
+  async updateProfile(userId: number, dto: UpdateProfileDto) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['pegawai'],
+    });
+
+    if (!user || !user.pegawai) {
+      throw new NotFoundException('Data pegawai untuk pengguna ini tidak ditemukan.');
+    }
+
+    // Update data pegawai
+    Object.assign(user.pegawai, dto);
+    const updatedPegawai = await this.pegawaiRepo.save(user.pegawai);
+    await this.deleteProfileCache(userId);
+
+    return updatedPegawai;
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Pengguna tidak ditemukan.');
+    }
+
+    // Verifikasi password lama
+    const isMatch = await bcrypt.compare(dto.oldPassword, user.password);
+    if (!isMatch) {
+      throw new BadRequestException('Kata sandi lama salah.');
+    }
+
+    // Hash dan simpan password baru
+    const salt = await bcrypt.genSalt();
+    user.password = await bcrypt.hash(dto.newPassword, salt);
+    user.refreshToken = null; // Reset refresh token untuk force logout
+    await this.userRepo.save(user);
+    await this.deleteProfileCache(userId);
+
+    return {
+      success: true,
+      message: 'Kata sandi berhasil diubah. Silakan login kembali.',
+    };
+  }
+
+  async updateAvatar(userId: number, relativePath: string) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['pegawai'],
+    });
+
+    if (!user || !user.pegawai) {
+      throw new NotFoundException('Data pegawai tidak ditemukan.');
+    }
+
+    // Hapus berkas avatar lama dari disk jika ada
+    if (user.pegawai.avatar) {
+      const oldPath = path.join(process.cwd(), user.pegawai.avatar);
+      if (fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+        } catch (e) {
+          console.error('Gagal menghapus foto profil lama dari server disk:', e);
+        }
+      }
+    }
+
+    user.pegawai.avatar = relativePath;
+    await this.pegawaiRepo.save(user.pegawai);
+    await this.deleteProfileCache(userId);
+
+    return {
+      success: true,
+      message: 'Foto profil berhasil diunggah.',
+      avatarUrl: relativePath,
+    };
+  }
 }

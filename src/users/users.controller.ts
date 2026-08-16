@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Put,
   Patch,
   Delete,
@@ -9,6 +10,12 @@ import {
   Param,
   ParseIntPipe,
   UseGuards,
+  Req,
+  Res,
+  UseInterceptors,
+  UploadedFile,
+  UnprocessableEntityException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,12 +24,24 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
+  ApiParam,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto, ToggleUserStatusDto, ResetPasswordDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
+import { UploadStorageHelper } from '@common/utils/upload-storage.util';
+import { MulterFile } from '@common/types/multer-file.type';
+import type { Response } from 'express';
 
 @ApiTags('User Management')
 @ApiBearerAuth()
@@ -30,6 +49,133 @@ import { PermissionGuard } from '../permissions/guards/permission.guard';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('profile')
+  @ApiOperation({ summary: 'Mendapatkan data profil user yang sedang login beserta detail pegawai' })
+  getProfile(@Req() req: any) {
+    const userId = req?.user?.userId || req?.user?.id;
+    return this.usersService.getProfile(userId);
+  }
+
+  @Put('profile')
+  @ApiOperation({ summary: 'Memperbarui data pribadi profil pegawai' })
+  @ApiBody({ type: UpdateProfileDto })
+  updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
+    const userId = req?.user?.userId || req?.user?.id;
+    return this.usersService.updateProfile(userId, dto);
+  }
+
+  @Put('profile/change-password')
+  @ApiOperation({ summary: 'Mengubah kata sandi akun pengguna' })
+  @ApiBody({ type: ChangePasswordDto })
+  changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    const userId = req?.user?.userId || req?.user?.id;
+    return this.usersService.changePassword(userId, dto);
+  }
+
+  @Post('profile/avatar')
+  @ApiOperation({ summary: 'Mengunggah foto profil (avatar)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const tempPath = path.join(process.cwd(), 'storage/uploads/avatars/.tmp');
+          if (!fs.existsSync(tempPath)) {
+            fs.mkdirSync(tempPath, { recursive: true });
+          }
+          cb(null, tempPath);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = `${Date.now()}-${randomUUID()}`;
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `avatar-${uniqueSuffix}${ext}`);
+        },
+      }),
+      limits: {
+        fileSize: 2 * 1024 * 1024, // 2MB
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        
+        if (!allowedMimeTypes.includes(file.mimetype) || !allowedExtensions.includes(ext)) {
+          return cb(
+            new UnprocessableEntityException('Format gambar tidak diizinkan! Hanya JPG, PNG, dan WEBP.') as any,
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File avatar pengguna (JPG/PNG/WEBP, maks 2MB)',
+        },
+      },
+    },
+  })
+  async uploadAvatar(@UploadedFile() file: MulterFile, @Req() req: any) {
+    if (!file) {
+      throw new UnprocessableEntityException('Silakan pilih berkas gambar.');
+    }
+    const userId = req?.user?.userId || req?.user?.id;
+    const slug = req?.user?.slug || 'default';
+
+    const { relativeFolder, absoluteFolder } = UploadStorageHelper.getUploadPath(slug, 'avatars');
+    UploadStorageHelper.ensureDirectoryExists(absoluteFolder);
+
+    const targetFilePath = path.join(absoluteFolder, file.filename);
+    const sourcePath = file.path
+      ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
+      : path.join(process.cwd(), 'storage/uploads/avatars/.tmp', file.filename);
+
+    if (!fs.existsSync(sourcePath)) {
+      throw new UnprocessableEntityException('Berkas sementara tidak ditemukan.');
+    }
+
+    UploadStorageHelper.moveFile(sourcePath, targetFilePath);
+
+    const storedFileName = path.join(relativeFolder, file.filename).replace(/\\/g, '/');
+    const relativeStoredPath = `/users/profile/avatar-stream/${storedFileName}`;
+
+    return this.usersService.updateAvatar(userId, relativeStoredPath);
+  }
+
+  @Get('profile/avatar-stream/*path')
+  @ApiOperation({ summary: 'Mendapatkan file foto profil (stream/serve)' })
+  @ApiParam({ name: 'path', description: 'Relative path ke file avatar', type: 'string' })
+  async streamAvatar(@Req() req: any, @Res() res: Response) {
+    const rawPath = (req.params as any).path || req.params[0] || req.params['0'] || '';
+    const filePath = UploadStorageHelper.resolveFileForStreaming(rawPath);
+
+    if (!filePath) {
+      throw new NotFoundException('Foto profil tidak ditemukan.');
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+    else if (ext === '.png') contentType = 'image/png';
+    else if (ext === '.webp') contentType = 'image/webp';
+
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+
+    fs.createReadStream(filePath).pipe(res);
+  }
 
   @Get('all')
   @RequirePermission('User', 'view')
