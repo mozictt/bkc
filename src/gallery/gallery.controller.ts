@@ -15,6 +15,7 @@ import {
   Query,
   UnprocessableEntityException,
   UseGuards,
+  StreamableFile,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { GalleryService } from './gallery.service';
@@ -160,8 +161,8 @@ export class GalleryController {
   @RequirePermission('Gallery', 'view')
   @ApiOperation({ summary: 'Mengunduh beberapa media galeri sekaligus sebagai file ZIP' })
   @ApiResponse({ status: 200, description: 'Stream berkas ZIP berisi media terpilih' })
-  async downloadBulk(@Body() bulkActionDto: BulkActionDto, @Res() res: Response) {
-    return this.galleryService.downloadBulk(bulkActionDto, res);
+  downloadBulk(@Body() bulkActionDto: BulkActionDto): Promise<StreamableFile> {
+    return this.galleryService.downloadBulk(bulkActionDto);
   }
 
   @Get(':id')

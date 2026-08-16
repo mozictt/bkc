@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, StreamableFile } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, ILike, In } from 'typeorm';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
@@ -298,7 +298,7 @@ export class GalleryService {
     };
   }
 
-  async downloadBulk(dto: BulkActionDto, res: Response) {
+  async downloadBulk(dto: BulkActionDto): Promise<StreamableFile> {
     const tenantFilter = this.getTenantFilter();
     const galleries = await this.galleryRepo.find({
       where: {
@@ -310,10 +310,6 @@ export class GalleryService {
     if (galleries.length === 0) {
       throw new NotFoundException('Tidak ada media yang ditemukan untuk diunduh');
     }
-
-    // Set headers untuk streaming ZIP
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=gallery-download.zip');
 
     let archive: any;
     if (typeof archiver === 'function') {
@@ -333,9 +329,6 @@ export class GalleryService {
       throw new InternalServerErrorException(err.message);
     });
 
-    // Pipa data zip ke output response express
-    archive.pipe(res);
-
     for (const gallery of galleries) {
       const filePath = UploadStorageHelper.resolveFileForStreaming(gallery.fileName, 'gallery');
       if (filePath && fs.existsSync(filePath)) {
@@ -344,7 +337,13 @@ export class GalleryService {
       }
     }
 
-    await archive.finalize();
+    // Trigger finalisasi secara asinkron
+    archive.finalize();
+
+    return new StreamableFile(archive, {
+      type: 'application/zip',
+      disposition: 'attachment; filename=gallery-download.zip',
+    });
   }
 }
 
