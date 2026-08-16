@@ -40,8 +40,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-https://dlinzi.web.id}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://dlinzi.web.id,http://localhost:3000,http://localhost:3001}
     volumes:
-      # Persistent storage untuk file upload gallery
-      - app_uploads:/app/storage/uploads
+      # Persistent storage langsung terhubung ke folder Host OS ./storage/uploads
+      - ./storage/uploads:/app/storage/uploads
     depends_on:
       redis:
         condition: service_healthy

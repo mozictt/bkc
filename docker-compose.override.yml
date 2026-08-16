@@ -17,5 +17,5 @@ services:
     volumes:
       - .:/app                    # Mount source code untuk hot reload
       - /app/node_modules         # Anonymous volume — lindungi node_modules container
-      - app_uploads:/app/storage/uploads
+      - ./storage/uploads:/app/storage/uploads
 

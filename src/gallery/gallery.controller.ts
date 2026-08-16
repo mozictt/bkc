@@ -21,6 +21,7 @@ import { GalleryService } from './gallery.service';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
 import { UpdateGalleryDto } from './dto/update-gallery.dto';
 import { diskStorage } from 'multer';
+import * as path from 'path';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
@@ -29,7 +30,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
 import { MulterFile } from '@common/types/multer-file.type';
-import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody, ApiHeader, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiConsumes, ApiBody, ApiHeader, ApiQuery, ApiResponse, ApiOperation } from '@nestjs/swagger';
+
+import { QueryGalleryDto } from './dto/query-gallery.dto';
+import { BulkActionDto } from './dto/bulk-action.dto';
 
 @ApiTags('Gallery')
 @ApiBearerAuth()
@@ -40,12 +44,13 @@ export class GalleryController {
 
   @Post('upload-bulk')
   @RequirePermission('Gallery', 'create')
+  @ApiOperation({ summary: 'Unggah banyak foto/video galeri ke folder berdasarkan slug tenant dan nama album' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        albumId: { type: 'string', format: 'uuid', description: 'ID Album opsional (UUID)' },
+        albumId: { type: 'string', format: 'uuid', description: 'ID Album opsional (UUID). Jika diisi, media disimpan di /storage/uploads/gallery/{slug}/{nama_album}' },
         files: {
           type: 'array',
           items: {
@@ -61,11 +66,11 @@ export class GalleryController {
     FilesInterceptor('files', 20, {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const path = './storage/uploads/gallery';
-          if (!fs.existsSync(path)) {
-            fs.mkdirSync(path, { recursive: true });
+          const tempPath = path.join(process.cwd(), 'storage/uploads/gallery/.tmp');
+          if (!fs.existsSync(tempPath)) {
+            fs.mkdirSync(tempPath, { recursive: true });
           }
-          cb(null, path);
+          cb(null, tempPath);
         },
         filename: (req, file, cb) => {
           const uniqueSuffix = `${Date.now()}-${randomUUID()}`;
@@ -102,8 +107,9 @@ export class GalleryController {
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
   }
 
-  @Get('media/:filename')
+  @Get('media/*path')
   @RequirePermission('Gallery', 'view')
+  @ApiOperation({ summary: 'Stream / ambil file media galeri berdasarkan relative path (slug/judul/filename)' })
   @ApiHeader({
     name: 'range',
     required: false,
@@ -127,18 +133,35 @@ export class GalleryController {
     description: 'Range Not Satisfiable - Byte range yang diminta melebihi ukuran file.',
   })
   async getMedia(
-    @Param('filename') filename: string,
     @Req() req: Request,
     @Res() res: Response,
     @Query('token') token?: string,
   ) {
-    return this.galleryService.streamMedia(filename, req, res);
+    const rawPath = (req.params as any).path || req.params[0] || req.params['0'] || '';
+    return this.galleryService.streamMedia(rawPath, req, res);
   }
 
   @Get()
   @RequirePermission('Gallery', 'view')
-  findAll() {
-    return this.galleryService.findAll();
+  @ApiOperation({ summary: 'Mendapatkan daftar media galeri terpaginasi dengan filter albumId, search, dan type' })
+  findAll(@Query() queryDto: QueryGalleryDto) {
+    return this.galleryService.findAll(queryDto);
+  }
+
+  @Delete('bulk')
+  @RequirePermission('Gallery', 'delete')
+  @ApiOperation({ summary: 'Menghapus beberapa media galeri sekaligus' })
+  @ApiResponse({ status: 200, description: 'Media berhasil dihapus massal' })
+  removeBulk(@Body() bulkActionDto: BulkActionDto) {
+    return this.galleryService.removeBulk(bulkActionDto);
+  }
+
+  @Post('download-bulk')
+  @RequirePermission('Gallery', 'view')
+  @ApiOperation({ summary: 'Mengunduh beberapa media galeri sekaligus sebagai file ZIP' })
+  @ApiResponse({ status: 200, description: 'Stream berkas ZIP berisi media terpilih' })
+  async downloadBulk(@Body() bulkActionDto: BulkActionDto, @Res() res: Response) {
+    return this.galleryService.downloadBulk(bulkActionDto, res);
   }
 
   @Get(':id')

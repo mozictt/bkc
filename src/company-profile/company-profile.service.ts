@@ -17,14 +17,10 @@ import { TenantContextService } from '../common/tenant/tenant-context.service';
 import { BaseTenantService } from '../common/tenant/base-tenant.service';
 import { CreateCompanyProfileDto } from './dto/create-company-profile.dto';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
+import { UploadStorageHelper } from '@common/utils/upload-storage.util';
 
 @Injectable()
 export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
-  private readonly logoStoragePath = path.join(
-    process.cwd(),
-    'storage/uploads/company-logo',
-  );
-
   // TTL 3 Jam = 10800 detik
   private readonly CACHE_TTL_SECONDS = 3 * 3600;
 
@@ -35,6 +31,13 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
     @InjectRedis() private readonly redis: Redis,
   ) {
     super(companyProfileRepo, tenantService, 'company_profile');
+  }
+
+  /**
+   * Menghasilkan path folder penyimpanan logo berdasarkan slug tenant via UploadStorageHelper.
+   */
+  getLogoUploadPath(slug?: string): { relativeFolder: string; absoluteFolder: string } {
+    return UploadStorageHelper.getUploadPath(slug, 'company-profile');
   }
 
   // ─── Helper: Generate Key Cache Redis Berdasarkan User Login ─────────────
@@ -63,15 +66,14 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
 
   // ─── Stream / Serves file logo perusahaan ────────────────────────────────
 
-  streamLogo(filename: string, res: any) {
-    const sanitizedFilename = path.basename(filename);
-    const filePath = path.join(this.logoStoragePath, sanitizedFilename);
+  streamLogo(rawPath: string, res: any) {
+    const filePath = UploadStorageHelper.resolveFileForStreaming(rawPath, 'company-logo');
 
-    if (!fs.existsSync(filePath)) {
+    if (!filePath) {
       throw new NotFoundException('File logo tidak ditemukan');
     }
 
-    const ext = path.extname(filename).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
     let contentType = 'application/octet-stream';
     if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
     else if (ext === '.png') contentType = 'image/png';
@@ -264,9 +266,26 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
   ): Partial<CompanyProfile> {
     if (!file) return {};
 
+    const slug = this.tenantService.getSlug() || 'default';
+    const { relativeFolder, absoluteFolder } = this.getLogoUploadPath(slug);
+
+    UploadStorageHelper.ensureDirectoryExists(absoluteFolder);
+
+    const targetFilePath = path.join(absoluteFolder, file.filename);
+
+    const sourcePath = file.path
+      ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
+      : path.join(process.cwd(), 'storage/uploads/.tmp', file.filename);
+
+    if (fs.existsSync(sourcePath)) {
+      UploadStorageHelper.moveFile(sourcePath, targetFilePath);
+    }
+
+    const storedFileName = path.join(relativeFolder, file.filename).replace(/\\/g, '/');
+
     return {
-      logoPath: `/company-profile/logo/${file.filename}`,
-      logoFilename: file.filename,
+      logoPath: `/company-profile/logo/${storedFileName}`,
+      logoFilename: storedFileName,
     };
   }
 
@@ -277,21 +296,10 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
     oldLogoPath?: string | null,
   ): void {
     const filename =
-      logoFilename || (oldLogoPath ? path.basename(oldLogoPath) : null);
+      logoFilename || (oldLogoPath ? oldLogoPath.replace('/company-profile/logo/', '') : null);
     if (!filename) return;
 
-    const absolutePath = path.join(this.logoStoragePath, filename);
-
-    if (fs.existsSync(absolutePath)) {
-      try {
-        fs.unlinkSync(absolutePath);
-      } catch (err) {
-        console.error(
-          `[CompanyProfile] Gagal menghapus logo lama: ${absolutePath}`,
-          err,
-        );
-      }
-    }
+    UploadStorageHelper.removeFile(filename, 'company-logo');
   }
 }
 

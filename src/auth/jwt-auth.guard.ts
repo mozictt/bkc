@@ -30,10 +30,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
+    const queryToken = request.query?.token as string;
+    const token = (authHeader && authHeader.startsWith('Bearer '))
+      ? authHeader.split(' ')[1]
+      : queryToken;
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      
+    if (token) {
       // Cek apakah token ada di blacklist (Redis)
       const isBlacklisted = await this.redis.get(`blacklist_token:${token}`);
       if (isBlacklisted) {

@@ -44,7 +44,7 @@ import { RequirePermission } from '../permissions/decorators/require-permission.
 
 const logoStorage = diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = './storage/uploads/company-logo';
+    const uploadPath = './storage/uploads/.tmp';
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
@@ -99,22 +99,22 @@ export class CompanyProfileController {
   }
 
 
-  // ── GET /company-profile/logo/:filename ────────────────────────────────
-
-  @Get('logo/:filename')
+  // ── GET /company-profile/logo/*path ────────────────────────────────
+  @Get('logo/*path')
   @RequirePermission('CompanyProfile', 'view')
   @ApiOperation({
     summary: 'Stream / Ambil file logo perusahaan',
-    description: 'Mengambil file gambar logo perusahaan berdasarkan nama file.',
+    description: 'Mengambil file gambar logo perusahaan berdasarkan path relatif atau nama file.',
   })
-  @ApiParam({ name: 'filename', description: 'Nama file logo', type: 'string' })
+  @ApiParam({ name: 'path', description: 'Relative path atau nama file logo', type: 'string' })
   @ApiResponse({ status: 200, description: 'File logo berhasil diambil.' })
   @ApiResponse({ status: 404, description: 'File logo tidak ditemukan.' })
   getLogo(
-    @Param('filename') filename: string,
+    @Req() req: any,
     @Res() res: Response,
   ) {
-    return this.companyProfileService.streamLogo(filename, res);
+    const rawPath = (req.params as any).path || req.params[0] || req.params['0'] || '';
+    return this.companyProfileService.streamLogo(rawPath, res);
   }
 
   // ── POST /company-profile ───────────────────────────────────────────────
