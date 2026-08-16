@@ -11,6 +11,7 @@ import { MenuModule } from './menu/menu.module';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
 import { GalleryModule } from './gallery/gallery.module';
+import { DocumentModule } from './documents/document.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
@@ -64,6 +65,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     CommonModule,
     RoleModule,
     GalleryModule,
+    DocumentModule,
     PermissionsModule,
     TenantsModule,
     ActivityLogsModule,

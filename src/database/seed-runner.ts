@@ -3,9 +3,10 @@ import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
 import { Menu } from '../entities/menu.entity';
 import { Role } from '../role/entities/role.entity';
-import { RoleMenuPermission } from '../entities/role-menu-permissions.entity';
+import { Permission } from '../entities/permission.entity';
 import { runMenuSeed } from './seeds/menu-role.seeder';
 import { Tenant } from '../entities/tenant.entity';
+import { User } from '../entities/user.entity';
 
 // 1. Load environment variables dari file .env
 dotenv.config();
@@ -19,7 +20,7 @@ const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   // Pastikan semua entity yang terlibat dimasukkan di sini
-  entities: [Menu, Role, RoleMenuPermission, Tenant],
+  entities: [Menu, Role, Permission, Tenant, User],
   synchronize: false, // Selalu false agar tidak merusak schema yang ada
   logging: true,
 });
