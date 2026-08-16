@@ -204,8 +204,15 @@ export class AuthService {
     // 1. Cabut hak refresh token dengan mengatur nilainya menjadi null
     await this.userService.updateRefreshToken(userId, null);
 
-    // 2. Hapus cache permission user di Redis agar bersih dan aman
-    await this.redis.del(`user_menus:${userId}`);
+    // 2. Hapus semua data Redis yang terasosiasi dengan id_user (*:<userId>)
+    try {
+      const userKeys = await this.redis.keys(`*:${userId}`);
+      if (userKeys && userKeys.length > 0) {
+        await this.redis.del(...userKeys);
+      }
+    } catch (err) {
+      console.error(`Gagal menghapus cache Redis untuk userId ${userId}:`, err);
+    }
 
     // 3. Masukkan access token ke Blacklist Redis
     try {

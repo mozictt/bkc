@@ -9,12 +9,14 @@ export class TenantContextService {
     tenantId: string | null,
     slug: string | null,
     role: string | null,
+    userId: number | string | null,
     callback: () => void,
   ) {
     const store = new Map();
     store.set('tenantId', tenantId);
     store.set('slug', slug);
     store.set('role', role);
+    store.set('userId', userId);
     TenantContextService.storage.run(store, callback);
   }
 
@@ -25,14 +27,22 @@ export class TenantContextService {
       ? String(tenantId)
       : undefined;
   }
+
   getSlug(): string | undefined {
     const store = TenantContextService.storage.getStore();
     const slug = store?.get('slug');
 
     return slug !== undefined && slug !== null ? String(slug) : undefined;
   }
+
   getRole(): string | undefined {
     const store = TenantContextService.storage.getStore(); 
     return store?.get('role');
   }
+
+  getUserId(): number | string | undefined {
+    const store = TenantContextService.storage.getStore();
+    return store?.get('userId');
+  }
 }
+

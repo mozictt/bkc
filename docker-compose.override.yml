@@ -6,15 +6,16 @@
 services:
   app:
     build:
-      target: builder
+      target: development   # Gunakan stage development (ada nest CLI & devDeps)
     environment:
       NODE_ENV: development
       REDIS_HOST: redis
       JWT_SECRET: dev_secret_untuk_local_saja_jangan_di_production
       ALLOWED_ORIGINS: https://dlinzi.web.id,http://localhost:3000,http://localhost:3001
-    command: ["npm", "run", "start:dev"]
+    # Gunakan path absolut ke nest CLI — aman meskipun volume host di-mount
+    command: ["node_modules/.bin/nest", "start", "--watch"]
     volumes:
-      - .:/app
-      - /app/node_modules
+      - .:/app                    # Mount source code untuk hot reload
+      - /app/node_modules         # Anonymous volume — lindungi node_modules container
       - app_uploads:/app/storage/uploads
 

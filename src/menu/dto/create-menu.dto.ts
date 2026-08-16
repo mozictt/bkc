@@ -7,33 +7,34 @@ export class CreateMenuDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'http://example.com' })
-  @IsNotEmpty()
+  @ApiProperty({ example: '/dashboard', required: false, nullable: true })
+  @IsOptional()
   @IsString()
-  url: string;
+  url?: string;
 
-  @ApiProperty({ example: 'icon-name' })
+  @ApiProperty({ example: 'icon-name', required: false, nullable: true })
   @IsOptional()
   @IsString()
   icon?: string;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false, nullable: true })
   @IsOptional()
   @IsNumber()
   order_no?: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false, nullable: true })
   @IsOptional()
   @IsNumber()
   parent_id?: number;
 
-  @ApiProperty({ example: true })
+  @ApiProperty({ example: true, required: false })
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
 
-  @ApiProperty({ example: true })
+  @ApiProperty({ example: true, required: false })
   @IsOptional()
   @IsBoolean()
   is_visible?: boolean;
 }
+

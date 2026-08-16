@@ -1,7 +1,7 @@
 # ============================================================
-# Stage 1: Builder — Install deps & build aplikasi NestJS
+# Stage 1: Base — Install dependensi sistem & npm packages
 # ============================================================
-FROM node:24-alpine AS builder
+FROM node:24-alpine AS base
 
 # Install dependensi sistem yang dibutuhkan untuk bcrypt (node-gyp)
 RUN apk add --no-cache python3 make g++
@@ -11,8 +11,33 @@ WORKDIR /app
 # Copy package files dulu (optimasi Docker layer cache)
 COPY package*.json ./
 
-# Install SEMUA dependensi termasuk devDeps untuk proses build
+# Install SEMUA dependensi termasuk devDeps (untuk dev & build)
 RUN npm ci
+
+# ============================================================
+# Stage 2: Development — Hot reload dengan nest start --watch
+# ============================================================
+FROM base AS development
+
+WORKDIR /app
+
+# Pastikan nest CLI bisa dipanggil langsung
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
+# Copy seluruh source code
+COPY . .
+
+# Expose port dev
+EXPOSE 4000
+
+CMD ["nest", "start", "--watch"]
+
+# ============================================================
+# Stage 3: Builder — Compile TypeScript ke dist/
+# ============================================================
+FROM base AS builder
+
+WORKDIR /app
 
 # Copy seluruh source code
 COPY . .

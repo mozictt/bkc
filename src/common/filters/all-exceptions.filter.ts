@@ -32,6 +32,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else {
         message = exception.message;
       }
+    } else {
+      // Log error non-HttpException (Error 500) agar mudah di-debug
+      console.error('[AllExceptionsFilter] Unhandled Exception:', exception);
     }
 
     // Samakan strukturnya dengan interceptor suksesmu, tapi success: false
