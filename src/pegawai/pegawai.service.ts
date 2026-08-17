@@ -19,8 +19,6 @@ export class PegawaiService {
   ) {}
 
   private getTenantFilter() {
-    const role = this.tenantContext.getRole();
-    if (role === 'Super Admin') return {};
     return { tenantId: this.tenantContext.getTenantId() };
   }
 
@@ -56,7 +54,6 @@ export class PegawaiService {
   async findAll(queryDto: QueryPegawaiDto) {
     const { page = 1, limit = 10, search, position, sortBy = 'createdAt', sortType = 'DESC' } = queryDto;
     const tenantId = this.tenantContext.getTenantId();
-    const role = this.tenantContext.getRole();
 
     const query = this.pegawaiRepo.createQueryBuilder('pegawai')
       .leftJoinAndSelect('pegawai.kelurahan', 'kelurahan')
@@ -64,8 +61,8 @@ export class PegawaiService {
       .leftJoinAndSelect('kecamatan.kabupaten', 'kabupaten')
       .leftJoinAndSelect('kabupaten.provinsi', 'provinsi');
 
-    // Filter tenant jika bukan Super Admin
-    if (role !== 'Super Admin' && tenantId) {
+    // Filter tenant otomatis
+    if (tenantId) {
       query.andWhere('pegawai.tenantId = :tenantId', { tenantId });
     }
 

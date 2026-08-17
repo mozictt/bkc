@@ -19,8 +19,6 @@ export class AlbumService extends BaseTenantService<Album> {
   }
 
   private getTenantFilter() {
-    const role = this.tenantService.getRole();
-    if (role === 'Super Admin') return {};
     return { tenantId: this.tenantService.getTenantId() };
   }
 

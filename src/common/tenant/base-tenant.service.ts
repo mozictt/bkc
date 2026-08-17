@@ -17,19 +17,13 @@ export abstract class BaseTenantService<T extends ObjectLiteral> {
   }
 
   /**
-   * Filter Otomatis untuk QueryBuilder
+   * Filter Otomatis untuk QueryBuilder (Selalu Terisolasi Per Tenant Context)
    */
   protected createQuery(): SelectQueryBuilder<T> {
     const qb = this.repository.createQueryBuilder(this.alias);
-    const role = this.tenantService.getRole();
-
-    // Jika bukan Super Admin, tambahkan filter tenantId
-    if (role !== 'Super Admin') {
-      qb.where(`${this.alias}.tenantId = :tenantId`, { 
-        tenantId: this.tenantId // Getter ini akan throw error jika tenantId null
-      });
-    }
-    
+    qb.where(`${this.alias}.tenantId = :tenantId`, { 
+      tenantId: this.tenantId
+    });
     return qb;
   }
 
@@ -71,17 +65,12 @@ export abstract class BaseTenantService<T extends ObjectLiteral> {
   }
 
   async findOneById(id: any): Promise<T> {
-    const role = this.tenantService.getRole();
-    const whereClause: any = { id }; 
-    // console.log(role);
-
-    // Jika bukan Super Admin, paksa filter berdasarkan tenantId
-    if (role !== 'Super Admin') {
-      whereClause.tenantId = this.tenantId;
-    }
+    const whereClause: any = { 
+      id,
+      tenantId: this.tenantId
+    }; 
 
     const data = await this.repository.findOneBy(whereClause);
-    // console.log(data);
     
     if (!data) throw new NotFoundException(`${this.alias} tidak ditemukan`);
     return data;

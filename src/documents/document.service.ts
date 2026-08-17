@@ -20,8 +20,6 @@ export class DocumentService {
   ) {}
 
   private getTenantFilter() {
-    const role = this.tenantContext.getRole();
-    if (role === 'Super Admin') return {};
     return { tenantId: this.tenantContext.getTenantId() };
   }
 

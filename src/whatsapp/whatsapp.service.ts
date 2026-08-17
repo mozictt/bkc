@@ -69,10 +69,7 @@ export class WhatsappService implements OnApplicationBootstrap {
     const existingDevice = await this.deviceRepo.findOneBy({ id: deviceId });
     if (existingDevice) {
       if (existingDevice.tenantId !== tenantId) {
-        const userRole = this.tenantContext.getRole();
-        if (userRole !== 'Super Admin') {
-          throw new BadRequestException(`Perangkat ${deviceId} dimiliki oleh tenant lain!`);
-        }
+        throw new BadRequestException(`Perangkat ${deviceId} dimiliki oleh tenant lain!`);
       }
     } else {
       // Daftarkan perangkat baru ke database

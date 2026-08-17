@@ -33,12 +33,6 @@ export class TenantSubscriber implements EntitySubscriberInterface {
   private injectTenantId(event: InsertEvent<any> | UpdateEvent<any>) {
     const entity = event.entity;
     const tenantId = this.tenantContext.getTenantId();
-    const role = this.tenantContext.getRole();
-
-    // Jika Super Admin, jangan paksa inject tenantId dari context
-    if (role === 'Super Admin') {
-      return;
-    }
 
     // Cek apakah entitas ini memiliki kolom bernama 'tenantId' berdasarkan metadata TypeORM
     const hasTenantIdColumn = event.metadata.columns.some(
