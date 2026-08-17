@@ -6,6 +6,7 @@ import {
 import { DataSource, Repository, In } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Menu } from '@entities/menu.entity';
+import { Role } from '../role/entities/role.entity';
 import { TenantContextService } from '../common/tenant/tenant-context.service';
 import { Permission } from '@entities/permission.entity';
 import { UpdatePermissionDto } from './dto/update-permission.dto'; 
@@ -111,16 +112,6 @@ export class MenuService {
 
   async getAllMenusByRoleId(id: number, explicitTenantId?: string): Promise<any[]> {
     const tenantId = explicitTenantId || this.tenantContext.getTenantId();
-    const cacheKey = `menus:role:${id}:${tenantId || 'global'}`;
-
-    try {
-      const cached = await this.redis.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (err) {
-      console.error('[MenuService] Gagal mengambil cache menus:role:', err);
-    }
 
     try {
       let targetRoleId = id;
@@ -166,11 +157,7 @@ export class MenuService {
       const isMaster = this.tenantContext.getIsMaster();
 
       if (tenantId) {
-        if (isMaster || tenantId === '00000000-0000-0000-0000-000000000000') {
-          qb.andWhere('(menu.tenantId = :tenantId OR menu.tenantId IS NULL)', { tenantId });
-        } else {
-          qb.andWhere('menu.tenantId = :tenantId', { tenantId });
-        }
+        qb.andWhere('menu.tenantId = :tenantId', { tenantId });
       }
 
       qb.orderBy('parent.id', 'ASC', 'NULLS FIRST')
@@ -197,14 +184,11 @@ export class MenuService {
 
       const tree = this.buildMenuTree(flatMenusWithPermissions);
 
-      try {
-        await this.redis.set(cacheKey, JSON.stringify(tree), 'EX', 3600);
-      } catch (err) {
-        console.error('[MenuService] Gagal menyimpan cache menus:role:', err);
-      }
+      return tree;
 
       return tree;
     } catch (error) {
+      console.error('[MenuService Error]', error);
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Gagal mengambil data menu');
     }
