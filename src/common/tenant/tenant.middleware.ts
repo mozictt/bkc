@@ -58,7 +58,23 @@ export class TenantMiddleware implements NestMiddleware {
 
     if (targetTenantHeader) {
       if (isMaster) {
-        activeTenantId = targetTenantHeader.trim();
+        const rawTarget = targetTenantHeader.trim();
+        try {
+          const tenantRepo = this.dataSource.getRepository(Tenant);
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
+          const targetTenantObj = await tenantRepo.findOne({
+            where: isUuid ? { id: rawTarget } : { slug: rawTarget },
+          });
+          if (targetTenantObj) {
+            activeTenantId = targetTenantObj.id;
+            slug = targetTenantObj.slug;
+          } else {
+            activeTenantId = rawTarget;
+          }
+        } catch (err) {
+          console.error('[TenantMiddleware] Error resolving target tenant:', err?.message);
+          activeTenantId = rawTarget;
+        }
       } else {
         throw new ForbiddenException('Akses pengubahan konteks tenant ditolak (hanya untuk Master Tenant).');
       }
