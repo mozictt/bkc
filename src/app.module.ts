@@ -21,6 +21,7 @@ import { ActivityLogInterceptor } from './activity-logs/interceptors/activity-lo
 import { CompanyProfileModule } from './company-profile/company-profile.module';
 import { PegawaiModule } from './pegawai/pegawai.module';
 import { WilayahModule } from './wilayah/wilayah.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import * as dotenv from 'dotenv';
@@ -71,6 +72,7 @@ const importsList: any[] = [
   CompanyProfileModule,
   PegawaiModule,
   WilayahModule,
+  WhatsappModule,
 ];
 
 // Deklarasikan MockRedisModule secara Global jika Redis dinonaktifkan

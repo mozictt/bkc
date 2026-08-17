@@ -114,6 +114,18 @@ export const runMenuSeed = async (dataSource: DataSource) => {
     );
   }
 
+  let whatsappMenu = await menuRepo.findOneBy({ name: 'Integrasi WhatsApp' });
+  if (!whatsappMenu) {
+    whatsappMenu = await menuRepo.save(
+      menuRepo.create({
+        name: 'Integrasi WhatsApp',
+        url: '/whatsapp',
+        parent: systemMgmt,
+        order_no: 5,
+      }),
+    );
+  }
+
   // --- 2. SEED ROLES ---
   let adminRole = await roleRepo.findOne({ where: { name: 'Super Admin' } });
 

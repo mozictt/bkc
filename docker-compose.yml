@@ -43,6 +43,7 @@ services:
     volumes:
       # Persistent storage langsung terhubung ke folder Host OS ./storage/uploads
       - ./storage/uploads:/app/storage/uploads
+      - ./storage/whatsapp-sessions:/app/storage/whatsapp-sessions
     depends_on:
       redis:
         condition: service_healthy
