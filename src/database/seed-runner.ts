@@ -8,6 +8,11 @@ import { runMenuSeed } from './seeds/menu-role.seeder';
 import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
+import { Provinsi } from '../entities/provinsi.entity';
+import { Kabupaten } from '../entities/kabupaten.entity';
+import { Kecamatan } from '../entities/kecamatan.entity';
+import { Kelurahan } from '../entities/kelurahan.entity';
+import { runWilayahSeed } from './seeds/wilayah.seeder';
 
 // 1. Load environment variables dari file .env
 dotenv.config();
@@ -21,7 +26,7 @@ const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   // Pastikan semua entity yang terlibat dimasukkan di sini
-  entities: [Menu, Role, Permission, Tenant, User, Pegawai],
+  entities: [Menu, Role, Permission, Tenant, User, Pegawai, Provinsi, Kabupaten, Kecamatan, Kelurahan],
   synchronize: false, // Selalu false agar tidak merusak schema yang ada
   logging: true,
 });
@@ -36,6 +41,7 @@ async function run() {
 
     // 3. Jalankan fungsi seeder
     await runMenuSeed(AppDataSource);
+    await runWilayahSeed(AppDataSource);
 
     console.log('🏁 Seeding finished successfully!');
     process.exit(0);
@@ -48,3 +54,4 @@ async function run() {
 
 // Jalankan script
 run();
+

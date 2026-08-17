@@ -3,8 +3,11 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { TenantBaseEntity } from '@entities/tenant-base.entity';
+import type { Kelurahan } from '@entities/kelurahan.entity';
 
 /**
  * Entity profil perusahaan (per-tenant).
@@ -57,6 +60,13 @@ export class CompanyProfile extends TenantBaseEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   country: string | null;
 
+  @Column({ name: 'id_kelurahan', type: 'varchar', length: 13, nullable: true })
+  idKelurahan: string | null;
+
+  @ManyToOne('Kelurahan', { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'id_kelurahan' })
+  kelurahan: Kelurahan | null;
+
   // ─── Legal & Bisnis ───────────────────────────────────────────────────────
 
   @Column({ type: 'varchar', length: 50, nullable: true })
@@ -95,3 +105,4 @@ export class CompanyProfile extends TenantBaseEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   linkedin: string | null;
 }
+

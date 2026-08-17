@@ -1,5 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { TenantBaseEntity } from './tenant-base.entity';
+import type { Kelurahan } from './kelurahan.entity';
 
 @Entity('pegawai')
 export class Pegawai extends TenantBaseEntity {
@@ -29,4 +30,12 @@ export class Pegawai extends TenantBaseEntity {
 
   @Column({ type: 'text', nullable: true })
   address: string | null;
+
+  @Column({ name: 'id_kelurahan', type: 'varchar', length: 13, nullable: true })
+  idKelurahan: string | null;
+
+  @ManyToOne('Kelurahan', { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'id_kelurahan' })
+  kelurahan: Kelurahan | null;
 }
+

@@ -82,6 +82,12 @@ export class CreateCompanyProfileDto {
   @MaxLength(100)
   country?: string;
 
+  @ApiPropertyOptional({ example: '31.71.01.1001', description: 'ID Kelurahan domisili perusahaan (BPS/Kemendagri)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(13)
+  idKelurahan?: string;
+
   // ─── Legal & Bisnis ───────────────────────────────────────────────────────
 
   @ApiPropertyOptional({ example: '01.234.567.8-901.000', description: 'NPWP perusahaan' })

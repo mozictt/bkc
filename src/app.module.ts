@@ -20,6 +20,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { ActivityLogInterceptor } from './activity-logs/interceptors/activity-log.interceptor';
 import { CompanyProfileModule } from './company-profile/company-profile.module';
 import { PegawaiModule } from './pegawai/pegawai.module';
+import { WilayahModule } from './wilayah/wilayah.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -72,6 +73,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ActivityLogsModule,
     CompanyProfileModule,
     PegawaiModule,
+    WilayahModule,
   ],
   providers: [
     {

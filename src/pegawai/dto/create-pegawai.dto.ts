@@ -44,4 +44,11 @@ export class CreatePegawaiDto {
   @IsString()
   @MaxLength(500, { message: 'Alamat maksimal 500 karakter' })
   address?: string;
+
+  @ApiPropertyOptional({ example: '31.71.01.1001', description: 'ID Kelurahan tempat tinggal pegawai (BPS/Kemendagri)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(13, { message: 'ID Kelurahan maksimal 13 karakter' })
+  idKelurahan?: string;
 }
+

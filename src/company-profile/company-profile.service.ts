@@ -114,6 +114,12 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
     if (role === 'Super Admin') {
       profile = await this.companyProfileRepo.findOne({
         where: { deletedAt: null as any },
+        relations: [
+          'kelurahan',
+          'kelurahan.kecamatan',
+          'kelurahan.kecamatan.kabupaten',
+          'kelurahan.kecamatan.kabupaten.provinsi',
+        ],
       });
     } else {
       if (!tenantId) {
@@ -121,6 +127,12 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
       }
       profile = await this.companyProfileRepo.findOne({
         where: { tenantId, deletedAt: null as any },
+        relations: [
+          'kelurahan',
+          'kelurahan.kecamatan',
+          'kelurahan.kecamatan.kabupaten',
+          'kelurahan.kecamatan.kabupaten.provinsi',
+        ],
       });
     }
 
@@ -175,9 +187,9 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
       ...this.resolveLogoFields(logoFile),
     });
 
-    const saved = await this.companyProfileRepo.save(profile);
+    await this.companyProfileRepo.save(profile);
     await this.invalidateCache();
-    return saved;
+    return this.getProfile();
   }
 
   // ─── Update profil berdasarkan ID ─────────────────────────────────────────
@@ -193,14 +205,14 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
       this.deleteOldLogo(existing.logoFilename, existing.logoPath);
     }
 
-    const updated = await this.companyProfileRepo.save({
+    await this.companyProfileRepo.save({
       ...existing,
       ...dto,
       ...this.resolveLogoFields(logoFile),
     });
 
     await this.invalidateCache();
-    return updated;
+    return this.getProfile();
   }
 
   // ─── Soft delete profil berdasarkan ID ────────────────────────────────────
