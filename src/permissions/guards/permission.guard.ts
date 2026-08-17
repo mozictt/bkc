@@ -9,11 +9,14 @@ import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import { PermissionService } from '../permission.service';
 import { PrimitiveAction } from '../constants/access-level.constant';
 
+import { TenantContextService } from '@common/tenant/tenant-context.service';
+
 @Injectable()
 export class PermissionGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private permissionService: PermissionService,
+    private tenantContext: TenantContextService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,6 +37,13 @@ export class PermissionGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException('Akses ditolak: Anda harus login terlebih dahulu.');
+    }
+
+    // 🛡️ Super Admin dari Master Tenant memiliki akses penuh ke seluruh resource
+    const isMaster = this.tenantContext.getIsMaster();
+    const roleName = this.tenantContext.getRole() || user?.role;
+    if (isMaster && String(roleName).trim().toLowerCase() === 'super admin') {
+      return true;
     }
 
     const tenantId = request.tenantId || user.tenantId;

@@ -163,8 +163,14 @@ export class MenuService {
         .leftJoinAndSelect('menu.parent', 'parent')
         .where('menu.is_active = :isActive', { isActive: true });
 
+      const isMaster = this.tenantContext.getIsMaster();
+
       if (tenantId) {
-        qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+        if (isMaster || tenantId === '00000000-0000-0000-0000-000000000000') {
+          qb.andWhere('(menu.tenantId = :tenantId OR menu.tenantId IS NULL)', { tenantId });
+        } else {
+          qb.andWhere('menu.tenantId = :tenantId', { tenantId });
+        }
       }
 
       qb.orderBy('parent.id', 'ASC', 'NULLS FIRST')
