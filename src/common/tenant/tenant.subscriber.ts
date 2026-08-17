@@ -39,10 +39,12 @@ export class TenantSubscriber implements EntitySubscriberInterface {
       (column) => column.propertyName === 'tenantId',
     );
 
-    if (entity && hasTenantIdColumn && tenantId) {
-      // Inject tenantId secara otomatis
-      entity.tenantId = tenantId;
-      console.log(`[TenantSubscriber] Injected tenantId: ${tenantId} into ${event.metadata.targetName}`);
+    if (entity && hasTenantIdColumn) {
+      if (!entity.tenantId && tenantId) {
+        // Inject tenantId secara otomatis jika belum di-set secara eksplisit
+        entity.tenantId = tenantId;
+        console.log(`[TenantSubscriber] Injected tenantId: ${tenantId} into ${event.metadata.targetName}`);
+      }
     } else if (!tenantId) {
       console.warn(`[TenantSubscriber] Warning: No tenantId found in context!`);
     }
