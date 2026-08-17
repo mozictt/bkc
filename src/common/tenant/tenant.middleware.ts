@@ -16,6 +16,7 @@ export class TenantMiddleware implements NestMiddleware {
     let originTenantId = null;
     let slug = null;
     let role = null;
+    let roleId = null;
     let userId = null;
 
     if (authHeader) {
@@ -25,7 +26,8 @@ export class TenantMiddleware implements NestMiddleware {
           const decoded: any = jwt.decode(token);  
           originTenantId = decoded?.tenantId || null;
           slug = decoded?.slug || null; 
-          role = decoded?.role || decoded?.role_id; // Preferensi nama role (string) atau fallback ID
+          role = decoded?.role || null;
+          roleId = decoded?.role_id || null;
           userId = decoded?.sub || decoded?.userId || null;
         }
       } catch (error) {
@@ -72,6 +74,7 @@ export class TenantMiddleware implements NestMiddleware {
       },
       isMaster,
       originTenantId,
+      roleId,
     );
   }
 }

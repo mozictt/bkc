@@ -13,13 +13,14 @@ export class MasterTenantGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isMaster = this.tenantContext.getIsMaster();
     let role = this.tenantContext.getRole();
+    const roleId = this.tenantContext.getRoleId();
     const request = context.switchToHttp().getRequest();
 
-    // Jika role bernilai ID (number atau string angka), resolve nama role dari DB
-    if (role && (typeof role === 'number' || /^\d+$/.test(String(role)))) {
+    // Jika nama role belum terisi tapi roleId ada (legacy token), resolve nama role dari DB
+    if (!role && roleId) {
       try {
         const roleRepo = this.dataSource.getRepository(Role);
-        const roleEntity = await roleRepo.findOne({ where: { id: +role } });
+        const roleEntity = await roleRepo.findOne({ where: { id: +roleId } });
         if (roleEntity) {
           role = roleEntity.name;
         }

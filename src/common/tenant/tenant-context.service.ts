@@ -13,11 +13,13 @@ export class TenantContextService {
     callback: () => void,
     isMaster = false,
     originTenantId: string | null = null,
+    roleId: number | string | null = null,
   ) {
     const store = new Map();
     store.set('tenantId', tenantId);
     store.set('slug', slug);
     store.set('role', role);
+    store.set('roleId', roleId);
     store.set('userId', userId);
     store.set('isMaster', isMaster);
     store.set('originTenantId', originTenantId || tenantId);
@@ -42,6 +44,11 @@ export class TenantContextService {
   getRole(): string | undefined {
     const store = TenantContextService.storage.getStore(); 
     return store?.get('role');
+  }
+
+  getRoleId(): number | string | undefined {
+    const store = TenantContextService.storage.getStore();
+    return store?.get('roleId');
   }
 
   getUserId(): number | string | undefined {
