@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Delete, Body, Param, Query, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, Query, NotFoundException, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { WhatsappService } from './whatsapp.service';
-import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBody, ApiConsumes } from '@nestjs/swagger';
 
 @ApiTags('WhatsApp')
 @Controller('whatsapp')
@@ -52,48 +53,45 @@ export class WhatsappController {
   }
 
   @Post('send')
-  @ApiOperation({ summary: 'Mengirim pesan teks WhatsApp' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        deviceId: { type: 'string', example: '1' },
-        to: { type: 'string', example: '628123456789' },
-        text: { type: 'string', example: 'Halo, ini tes pesan!' },
-      },
-      required: ['deviceId', 'to', 'text'],
-    },
-  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiOperation({ summary: 'Mengirim pesan WhatsApp (Teks dan/atau Foto, Video, PDF)' })
   async send(
     @Body('deviceId') deviceId: string,
     @Body('to') to: string,
     @Body('text') text: string,
+    @UploadedFile() file?: Express.Multer.File,
+    @Body('mediaUrl') mediaUrl?: string,
   ) {
-    const res = await this.waService.sendMessage(deviceId, to, text);
+    const target = file || mediaUrl;
+    const res = await this.waService.sendMessage(deviceId, to, text, target);
     return { success: true, messageId: res.key.id };
   }
 
   @Post('broadcast')
-  @ApiOperation({ summary: 'Mengirim broadcast pesan ke banyak nomor sekaligus (background task)' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        deviceId: { type: 'string', example: '1' },
-        recipients: { type: 'array', items: { type: 'string' }, example: ['628123456789', '628987654321'] },
-        text: { type: 'string', example: 'Halo! Ini pesan broadcast.' },
-        delay: { type: 'number', example: 3000 },
-      },
-      required: ['deviceId', 'recipients', 'text'],
-    },
-  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiOperation({ summary: 'Mengirim broadcast pesan ke banyak nomor sekaligus (Teks dan/atau Foto, Video, PDF)' })
   async broadcast(
     @Body('deviceId') deviceId: string,
-    @Body('recipients') recipients: string[],
+    @Body('recipients') recipientsRaw: any,
     @Body('text') text: string,
-    @Body('delay') delay = 3000,
+    @UploadedFile() file?: Express.Multer.File,
+    @Body('mediaUrl') mediaUrl?: string,
   ) {
-    return await this.waService.startBroadcast(deviceId, recipients, text, delay);
+    let recipients: string[] = [];
+    if (typeof recipientsRaw === 'string') {
+      recipients = recipientsRaw.split(/[\n,;]/).map((r) => r.trim()).filter(Boolean);
+    } else if (Array.isArray(recipientsRaw)) {
+      recipients = recipientsRaw;
+    }
+
+    if (recipients.length === 0) {
+      throw new BadRequestException('Daftar penerima broadcast tidak boleh kosong.');
+    }
+
+    const target = file || mediaUrl;
+    return await this.waService.startBroadcast(deviceId, recipients, text, target);
   }
 
   @Delete('session/:deviceId')
