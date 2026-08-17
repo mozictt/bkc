@@ -1,4 +1,4 @@
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '@auth/auth.module';
@@ -8,7 +8,7 @@ import { BarangModule } from './barang/module/barang.module';
 import { KategoriModule } from './barang/module/kategori.module';
 import { CommonModule } from './common/common.module';
 import { MenuModule } from './menu/menu.module';
-import { RedisModule } from '@nestjs-modules/ioredis';
+import { RedisModule, getRedisConnectionToken } from '@nestjs-modules/ioredis';
 import { RoleModule } from './role/role.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { DocumentModule } from './documents/document.module';
@@ -22,15 +22,80 @@ import { CompanyProfileModule } from './company-profile/company-profile.module';
 import { PegawaiModule } from './pegawai/pegawai.module';
 import { WilayahModule } from './wilayah/wilayah.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-
 import { ScheduleModule } from '@nestjs/schedule';
+import * as dotenv from 'dotenv';
 
+// Load .env variables
+dotenv.config();
+
+// Ambil status Redis dari environment (default ke true jika tidak didefinisikan)
+const redisEnabled = process.env.REDIS_ENABLED !== 'false';
+
+const importsList: any[] = [
+  ConfigModule.forRoot({
+    isGlobal: true,
+  }),
+  ScheduleModule.forRoot(),
+  TypeOrmModule.forRootAsync({
+    imports: [ConfigModule],
+    useFactory: (config: ConfigService) => {
+      const isProduction = config.get<string>('NODE_ENV') === 'production';
+      return {
+        type: 'postgres',
+        host: config.get<string>('DB_HOST') || 'localhost',
+        port: parseInt(config.get<string>('DB_PORT') || '5432', 10),
+        username: config.get('DB_USERNAME'),
+        password: config.get('DB_PASSWORD'),
+        database: config.get('DB_NAME'),
+        timezone: config.get<string>('APP_TIMEZONE') || 'UTC',
+        autoLoadEntities: true,
+        synchronize: !isProduction, // Matikan sinkronisasi otomatis di production demi keamanan data
+        logging: isProduction ? ['error'] : ['query', 'error'], // Hanya log error di production untuk cegah kebocoran data
+      };
+    },
+    inject: [ConfigService],
+  }),
+  AuthModule,
+  UsersModule,
+  CompanyModule,
+  BarangModule,
+  MenuModule,
+  KategoriModule,
+  CommonModule,
+  RoleModule,
+  GalleryModule,
+  DocumentModule,
+  PermissionsModule,
+  TenantsModule,
+  ActivityLogsModule,
+  CompanyProfileModule,
+  PegawaiModule,
+  WilayahModule,
+];
+
+// Deklarasikan MockRedisModule secara Global jika Redis dinonaktifkan
+@Global()
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-    ScheduleModule.forRoot(),
+  providers: [
+    {
+      provide: getRedisConnectionToken(),
+      useFactory: () => {
+        console.log('🔌 Running without Redis (Mock Client Active)');
+        return {
+          get: async () => null,
+          set: async () => 'OK',
+          del: async () => 0,
+          keys: async () => [],
+        };
+      },
+    },
+  ],
+  exports: [getRedisConnectionToken()],
+})
+class MockRedisModule {}
+
+if (redisEnabled) {
+  importsList.push(
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
@@ -43,48 +108,25 @@ import { ScheduleModule } from '@nestjs/schedule';
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST') || 'localhost',
-        port: parseInt(config.get<string>('DB_PORT') || '5432', 10),
-        username: config.get('DB_USERNAME'),
-        password: config.get('DB_PASSWORD'),
-        database: config.get('DB_NAME'),
-        timezone: config.get<string>('APP_TIMEZONE') || 'UTC',
-        autoLoadEntities: true,
-        synchronize: true,
-      }),
-      inject: [ConfigService],
-    }),
-    AuthModule,
-    UsersModule,
-    CompanyModule,
-    BarangModule,
-    MenuModule,
-    KategoriModule,
-    CommonModule,
-    RoleModule,
-    GalleryModule,
-    DocumentModule,
-    PermissionsModule,
-    TenantsModule,
-    ActivityLogsModule,
-    CompanyProfileModule,
-    PegawaiModule,
-    WilayahModule,
-  ],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: ActivityLogInterceptor,
-    },
-  ],
+  );
+} else {
+  importsList.push(MockRedisModule);
+}
+
+const providersList: any[] = [
+  {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+  },
+  {
+    provide: APP_INTERCEPTOR,
+    useClass: ActivityLogInterceptor,
+  },
+];
+
+@Module({
+  imports: importsList,
+  providers: providersList,
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

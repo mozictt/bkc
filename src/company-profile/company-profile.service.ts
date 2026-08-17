@@ -109,9 +109,8 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
     const tenantId = this.tenantService.getTenantId();
     const role = this.tenantService.getRole();
 
-    let profile: CompanyProfile | null;
-
-    if (role === 'Super Admin') {
+    let profile: CompanyProfile | null;  
+    if (role === 'Super Admin') { 
       profile = await this.companyProfileRepo.findOne({
         where: { deletedAt: null as any },
         relations: [
@@ -121,10 +120,10 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
           'kelurahan.kecamatan.kabupaten.provinsi',
         ],
       });
-    } else {
+    } else { 
       if (!tenantId) {
         throw new NotFoundException('Tenant tidak ditemukan');
-      }
+      } 
       profile = await this.companyProfileRepo.findOne({
         where: { tenantId, deletedAt: null as any },
         relations: [
@@ -133,7 +132,8 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
           'kelurahan.kecamatan.kabupaten',
           'kelurahan.kecamatan.kabupaten.provinsi',
         ],
-      });
+      }); 
+      console.log(profile);
     }
 
     if (!profile) {

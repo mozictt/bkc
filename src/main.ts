@@ -35,6 +35,10 @@ async function bootstrap() {
     ? process.env.ALLOWED_ORIGINS.split(',')
     : ['http://localhost:3000', 'http://localhost:4000', 'https://dlinzi.web.id'];
 
+  const appPort = process.env.PORT ?? 3000;
+  rawOrigins.push(`http://localhost:${appPort}`);
+  rawOrigins.push(`http://127.0.0.1:${appPort}`);
+
   if (process.env.FRONTEND_URL) {
     rawOrigins.push(process.env.FRONTEND_URL);
   }

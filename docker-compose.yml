@@ -30,6 +30,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_TTL: ${REDIS_TTL:-3600}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
 
       # JWT
       JWT_SECRET: ${JWT_SECRET}
