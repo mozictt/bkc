@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
 import { Tenant } from '../entities/tenant.entity';
+import { Role } from '../role/entities/role.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -29,6 +30,8 @@ export class UsersService {
     private pegawaiRepo: Repository<Pegawai>,
     @InjectRepository(Tenant)
     private tenantRepo: Repository<Tenant>,
+    @InjectRepository(Role)
+    private roleRepo: Repository<Role>,
     private tenantContext: TenantContextService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
@@ -71,20 +74,47 @@ export class UsersService {
     tenantId: string,
     pegawaiId: number,
   ) {
-    // 🔍 1. Resolusi Tenant ID jika berupa slug (misal: "pos") atau ID tenant aktif
-    let targetTenantId = tenantId || this.tenantContext.getTenantId();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetTenantId);
+    // 🔍 1. Target Tenant ID: Prioritaskan Active Switched Tenant Context dari TenantContextService
+    let targetTenantId = this.tenantContext.getTenantId();
 
-    if (!isUuid && targetTenantId) {
-      const tenantObj = await this.tenantRepo.findOne({ where: { slug: targetTenantId } });
-      if (tenantObj) {
-        targetTenantId = tenantObj.id;
+    if (!targetTenantId && tenantId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+      if (isUuid) {
+        targetTenantId = tenantId;
       } else {
-        targetTenantId = this.tenantContext.getTenantId();
+        const tenantObj = await this.tenantRepo.findOne({ where: { slug: tenantId } });
+        if (tenantObj) {
+          targetTenantId = tenantObj.id;
+        }
       }
     }
 
-    // 2. Validasi apakah Pegawai ada di tenant yang sama
+    if (!targetTenantId) {
+      targetTenantId = tenantId;
+    }
+
+    // 🔍 2. Resolusi Role ID jika role ID berasal dari Master Tenant atau Tenant lain
+    let targetRoleId = id_role;
+    if (targetTenantId) {
+      const currentRole = await this.roleRepo
+        .createQueryBuilder('role')
+        .where('role.id = :id_role', { id_role })
+        .getOne();
+
+      if (currentRole && currentRole.tenantId !== targetTenantId) {
+        const matchingTenantRole = await this.roleRepo
+          .createQueryBuilder('role')
+          .where('LOWER(role.name) = LOWER(:name)', { name: currentRole.name })
+          .andWhere('role.tenantId = :targetTenantId', { targetTenantId })
+          .getOne();
+
+        if (matchingTenantRole) {
+          targetRoleId = matchingTenantRole.id;
+        }
+      }
+    }
+
+    // 3. Validasi apakah Pegawai ada di target tenant yang sama
     const pegawai = await this.pegawaiRepo.findOne({
       where: { id: pegawaiId, tenantId: targetTenantId ? targetTenantId : undefined },
     });
@@ -92,7 +122,7 @@ export class UsersService {
       throw new NotFoundException(`Pegawai dengan ID #${pegawaiId} tidak ditemukan.`);
     }
 
-    // 3. Validasi apakah Pegawai sudah dikaitkan dengan akun user lain
+    // 4. Validasi apakah Pegawai sudah dikaitkan dengan akun user lain
     const existingUser = await this.userRepo.findOne({
       where: { pegawaiId },
     });
@@ -103,7 +133,7 @@ export class UsersService {
     const user = this.userRepo.create({
       username,
       password: passwordHash,
-      role: { id: id_role },
+      role: { id: targetRoleId },
       tenantId: targetTenantId,
       pegawaiId,
       is_active: true,
