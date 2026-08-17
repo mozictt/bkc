@@ -25,7 +25,7 @@ export class TenantMiddleware implements NestMiddleware {
           const decoded: any = jwt.decode(token);  
           originTenantId = decoded?.tenantId || null;
           slug = decoded?.slug || null; 
-          role = decoded?.role_id; // Ambil role dari payload JWT
+          role = decoded?.role || decoded?.role_id; // Preferensi nama role (string) atau fallback ID
           userId = decoded?.sub || decoded?.userId || null;
         }
       } catch (error) {

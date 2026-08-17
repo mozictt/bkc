@@ -41,12 +41,12 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any, req?: any) {
     const payload = {
       sub: user.id,
       username: user.username,
       tenantId: user.tenantId, 
       role_id: user.role?.id,
+      role: user.role?.name,
       slug: user.tenant?.slug,
       tenantExpiredAt: user.tenant?.expiredAt,
       name_pegawai: user.pegawai?.name || null,
