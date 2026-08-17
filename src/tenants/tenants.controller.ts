@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
+import { CloneTenantConfigDto } from './dto/clone-tenant-config.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { MasterTenantGuard } from '../common/guards/master-tenant.guard';
@@ -57,5 +58,13 @@ export class TenantsController {
   @ApiOperation({ summary: 'Mengubah status Master Tenant (Toggle isMaster)' })
   async toggleMaster(@Param('id') id: string) {
     return this.tenantsService.toggleMaster(id);
+  }
+
+  @Post('clone-config')
+  @UseGuards(MasterTenantGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Menduplikasi konfigurasi Menu, Role, dan Permission ke Tenant Tujuan (Khusus Master Tenant)' })
+  async cloneTenantConfig(@Body() dto: CloneTenantConfigDto) {
+    return this.tenantsService.cloneTenantConfig(dto);
   }
 }
