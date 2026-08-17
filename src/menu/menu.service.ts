@@ -123,10 +123,27 @@ export class MenuService {
     }
 
     try {
-      // 1. Get all resources assigned to this role
+      let targetRoleId = id;
+
+      // 🔍 Resolusi Role per-Tenant: Jika role ID berasal dari tenant lain (misal Master Tenant),
+      // temukan role dengan NAMA yang sama pada active tenant!
+      if (tenantId) {
+        const roleRepo = this.dataSource.getRepository(Role);
+        const currentRole = await roleRepo.findOne({ where: { id } });
+        if (currentRole && currentRole.tenantId !== tenantId) {
+          const matchingTenantRole = await roleRepo.findOne({
+            where: { name: currentRole.name, tenantId },
+          });
+          if (matchingTenantRole) {
+            targetRoleId = matchingTenantRole.id;
+          }
+        }
+      }
+
+      // 1. Get all resources assigned to this role in active tenant
       const permissions = await this.permissionRepo.find({
         where: {
-          role: { id },
+          role: { id: targetRoleId },
           tenantId: tenantId ? tenantId : undefined,
         },
       });
@@ -147,10 +164,15 @@ export class MenuService {
 
       const flatMenus = await qb.getMany();
       
+      const isSuperAdmin = this.tenantContext.getIsMaster() && 
+        String(this.tenantContext.getRole()).trim().toLowerCase() === 'super admin';
+
       // 3. Inject accessLevel into menu based on permissions
       const flatMenusWithPermissions = flatMenus.map(menu => {
         let accessLevel: AccessLevel | null = null;
-        if (menu.requiredResource) {
+        if (isSuperAdmin) {
+          accessLevel = AccessLevel.WRITE;
+        } else if (menu.requiredResource) {
           const perm = permissions.find(p => p.resource === menu.requiredResource);
           if (perm && perm.accessLevel) {
              accessLevel = perm.accessLevel;

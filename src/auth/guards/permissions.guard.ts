@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectRedis } from '@nestjs-modules/ioredis'; // Gunakan decorator ini
 import Redis from 'ioredis'; // Import tipe Redis
-import { UsersService } from '@src/users/users.service';
+import { TenantContextService } from '@common/tenant/tenant-context.service';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -16,6 +16,7 @@ export class PermissionsGuard implements CanActivate {
     private reflector: Reflector,
     @InjectRedis() private readonly redis: Redis, // Inject Redis langsung
     private userService: UsersService,
+    private tenantContext: TenantContextService,
   ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,6 +32,13 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user || !user.userId) {
       throw new ForbiddenException('User session not found');
+    }
+
+    // 🛡️ Super Admin dari Master Tenant memiliki akses penuh ke seluruh menu & modul (Cross-Tenant Admin Access)
+    const isMaster = this.tenantContext.getIsMaster();
+    const roleName = this.tenantContext.getRole() || user?.role;
+    if (isMaster && String(roleName).trim().toLowerCase() === 'super admin') {
+      return true;
     }
 
     const cacheKey = `user_menus:${user.userId}`;
