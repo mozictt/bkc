@@ -76,7 +76,9 @@ export class TenantMiddleware implements NestMiddleware {
           activeTenantId = rawTarget;
         }
       } else {
-        throw new ForbiddenException('Akses pengubahan konteks tenant ditolak (hanya untuk Master Tenant).');
+        // Pengguna non-master tidak diizinkan switch tenant context. Silakan abaikan override header & gunakan origin tenant
+        console.warn(`[TenantMiddleware] Non-master user (${userId}) sent x-target-tenant-id header. Ignoring target override.`);
+        activeTenantId = originTenantId;
       }
     }
 
