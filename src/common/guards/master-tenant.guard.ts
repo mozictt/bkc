@@ -7,9 +7,11 @@ export class MasterTenantGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const isMaster = this.tenantContext.getIsMaster();
+    const role = this.tenantContext.getRole();
 
-    if (!isMaster) {
-      throw new ForbiddenException('Akses ditolak. Fitur ini hanya untuk Master Tenant.');
+    // Wajib berasal dari Master Tenant DAN memiliki role Super Admin
+    if (!isMaster || String(role) !== 'Super Admin') {
+      throw new ForbiddenException('Akses ditolak. Fitur ini hanya untuk Super Admin di Master Tenant.');
     }
 
     return true;
