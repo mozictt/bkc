@@ -131,10 +131,6 @@ export class TenantsService {
         });
 
         for (const sourceRole of sourceRoles) {
-          if (excludeSuperAdminRole && sourceRole.name?.toLowerCase() === 'super admin') {
-            continue;
-          }
-
           let existingRole = await roleRepo.findOne({
             where: { tenantId: targetTenantId, name: sourceRole.name },
           });

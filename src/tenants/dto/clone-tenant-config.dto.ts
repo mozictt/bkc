@@ -33,9 +33,4 @@ export class CloneTenantConfigDto {
   @IsOptional()
   @IsBoolean()
   includePermissions?: boolean = true;
-
-  @ApiProperty({ description: 'Kecualikan role Super Admin dari duplikasi (hanya salin role kustom seperti Staff/Kasir/Manager)', default: true, required: false })
-  @IsOptional()
-  @IsBoolean()
-  excludeSuperAdminRole?: boolean = true;
 }
