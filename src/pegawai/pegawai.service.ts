@@ -121,10 +121,9 @@ export class PegawaiService {
 
   async findUnassigned() {
     const tenantId = this.tenantContext.getTenantId();
-    const role = this.tenantContext.getRole();
     const query = this.pegawaiRepo.createQueryBuilder('pegawai');
 
-    if (role !== 'Super Admin' && tenantId) {
+    if (tenantId) {
       query.andWhere('pegawai.tenantId = :tenantId', { tenantId });
     }
 
