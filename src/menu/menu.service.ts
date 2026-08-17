@@ -128,12 +128,20 @@ export class MenuService {
       // 🔍 Resolusi Role per-Tenant: Jika role ID berasal dari tenant lain (misal Master Tenant),
       // temukan role dengan NAMA yang sama pada active tenant!
       if (tenantId) {
-        const roleRepo = this.dataSource.getRepository(Role);
-        const currentRole = await roleRepo.findOne({ where: { id } });
+        const currentRole = await this.dataSource
+          .getRepository(Role)
+          .createQueryBuilder('role')
+          .where('role.id = :id', { id })
+          .getOne();
+
         if (currentRole && currentRole.tenantId !== tenantId) {
-          const matchingTenantRole = await roleRepo.findOne({
-            where: { name: currentRole.name, tenantId },
-          });
+          const matchingTenantRole = await this.dataSource
+            .getRepository(Role)
+            .createQueryBuilder('role')
+            .where('LOWER(role.name) = LOWER(:name)', { name: currentRole.name })
+            .andWhere('role.tenantId = :tenantId', { tenantId })
+            .getOne();
+
           if (matchingTenantRole) {
             targetRoleId = matchingTenantRole.id;
           }

@@ -1,6 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { Tenant } from '../entities/tenant.entity';
 import { Role } from '../role/entities/role.entity';
 import { Menu } from '../entities/menu.entity';
@@ -13,6 +15,7 @@ export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
@@ -245,6 +248,15 @@ export class TenantsService {
       }
 
       await queryRunner.commitTransaction();
+
+      try {
+        const keys = await this.redis.keys('menus:*');
+        if (keys && keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+      } catch (err) {
+        console.error('[TenantsService] Gagal membersihkan cache menu:', err);
+      }
 
       return {
         success: true,
