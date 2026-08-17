@@ -44,7 +44,7 @@ export class TenantMiddleware implements NestMiddleware {
       try {
         const tenantRepo = this.dataSource.getRepository(Tenant);
         const tenantObj = await tenantRepo.findOne({ where: { id: originTenantId } });
-        if (tenantObj?.isMaster || originTenantId === '00000000-0000-0000-0000-000000000000' || String(role) === 'Super Admin') {
+        if (tenantObj?.isMaster || originTenantId === '00000000-0000-0000-0000-000000000000') {
           isMaster = true;
         }
       } catch (err) {

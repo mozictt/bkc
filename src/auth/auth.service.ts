@@ -96,8 +96,9 @@ export class AuthService {
         username: user.username,
         role: user.role?.name,
         id_role: user.role?.id,
-        tenantId: user.tenantId, // 👈 Return tenantId ke client
-        tenant: user.tenant, // 👈 Return tenantId ke client
+        tenantId: user.tenantId,
+        tenant: user.tenant,
+        isMaster: user.tenant?.isMaster || false,
         name_pegawai: user.pegawai?.name || null,
         pegawai: user.pegawai ? {
           id: user.pegawai.id,
