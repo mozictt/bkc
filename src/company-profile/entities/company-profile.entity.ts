@@ -104,5 +104,13 @@ export class CompanyProfile extends TenantBaseEntity {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   linkedin: string | null;
+
+  // ─── Master Tenant & Settings ─────────────────────────────────────────────
+
+  @Column({ name: 'is_master', type: 'boolean', default: false })
+  isMaster: boolean;
+
+  @Column({ type: 'jsonb', nullable: true, default: {} })
+  settings: Record<string, any> | null;
 }
 
