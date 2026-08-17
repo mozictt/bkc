@@ -104,6 +104,10 @@ export class TenantsService {
       throw new NotFoundException(`Target tenant dengan ID ${targetTenantId} tidak ditemukan.`);
     }
 
+    if (targetTenant.isMaster) {
+      throw new BadRequestException('Kloning ke Master Tenant tidak diperbolehkan. Master Tenant adalah acuan utama.');
+    }
+
     let effectiveSourceTenantId: string | null = sourceTenantId || null;
     if (sourceTenantId) {
       const sourceTenant = await this.tenantRepo.findOne({ where: { id: sourceTenantId } });
