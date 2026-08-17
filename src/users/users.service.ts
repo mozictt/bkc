@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
+import { Tenant } from '../entities/tenant.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -26,6 +27,8 @@ export class UsersService {
     private userRepo: Repository<User>,
     @InjectRepository(Pegawai)
     private pegawaiRepo: Repository<Pegawai>,
+    @InjectRepository(Tenant)
+    private tenantRepo: Repository<Tenant>,
     private tenantContext: TenantContextService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
@@ -68,15 +71,28 @@ export class UsersService {
     tenantId: string,
     pegawaiId: number,
   ) {
-    // 1. Validasi apakah Pegawai ada di tenant yang sama
+    // 🔍 1. Resolusi Tenant ID jika berupa slug (misal: "pos") atau ID tenant aktif
+    let targetTenantId = tenantId || this.tenantContext.getTenantId();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetTenantId);
+
+    if (!isUuid && targetTenantId) {
+      const tenantObj = await this.tenantRepo.findOne({ where: { slug: targetTenantId } });
+      if (tenantObj) {
+        targetTenantId = tenantObj.id;
+      } else {
+        targetTenantId = this.tenantContext.getTenantId();
+      }
+    }
+
+    // 2. Validasi apakah Pegawai ada di tenant yang sama
     const pegawai = await this.pegawaiRepo.findOne({
-      where: { id: pegawaiId, tenantId: tenantId ? tenantId : undefined },
+      where: { id: pegawaiId, tenantId: targetTenantId ? targetTenantId : undefined },
     });
     if (!pegawai) {
       throw new NotFoundException(`Pegawai dengan ID #${pegawaiId} tidak ditemukan.`);
     }
 
-    // 2. Validasi apakah Pegawai sudah dikaitkan dengan akun user lain
+    // 3. Validasi apakah Pegawai sudah dikaitkan dengan akun user lain
     const existingUser = await this.userRepo.findOne({
       where: { pegawaiId },
     });
@@ -88,7 +104,7 @@ export class UsersService {
       username,
       password: passwordHash,
       role: { id: id_role },
-      tenantId,
+      tenantId: targetTenantId,
       pegawaiId,
       is_active: true,
     });
