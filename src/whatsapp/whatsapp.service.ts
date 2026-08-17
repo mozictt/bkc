@@ -149,7 +149,23 @@ export class WhatsappService implements OnApplicationBootstrap {
             '';
 
           if (!msg.key.fromMe && textContent) {
-            const senderNumber = msg.key.remoteJid?.split('@')[0] || msg.key.remoteJid || '';
+            // Extract sender JID: prioritize real phone number (@s.whatsapp.net) from participant or remoteJid
+            let rawSender = msg.key.remoteJid || '';
+            if (msg.key.participant && msg.key.participant.includes('@s.whatsapp.net')) {
+              rawSender = msg.key.participant;
+            } else if (msg.participant && msg.participant.includes('@s.whatsapp.net')) {
+              rawSender = msg.participant;
+            }
+
+            let senderNumber = '';
+            if (rawSender.includes('@s.whatsapp.net')) {
+              senderNumber = rawSender.split('@')[0];
+            } else if (rawSender.includes('@lid')) {
+              // Store full JID for LID addresses so reply functionality can target @lid
+              senderNumber = rawSender;
+            } else {
+              senderNumber = rawSender.split('@')[0] || rawSender;
+            }
 
             console.log(`💬 WhatsApp [Device: ${deviceId}] dari ${senderNumber}: ${textContent}`);
 
@@ -173,7 +189,7 @@ export class WhatsappService implements OnApplicationBootstrap {
 
             // Contoh chatbot interaktif sederhana jika user mengirim pesan "/ping"
             if (textContent.trim().toLowerCase() === '/ping') {
-              await this.sendMessage(deviceId, msg.key.remoteJid || senderNumber, 'pong! Koneksi aktif.');
+              await this.sendMessage(deviceId, rawSender || senderNumber, 'pong! Koneksi aktif.');
             }
           }
         }
@@ -203,7 +219,7 @@ export class WhatsappService implements OnApplicationBootstrap {
   }
 
   /**
-   * Mengirim pesan teks ke nomor tertentu
+   * Mengirim pesan teks ke nomor / LID tertentu
    */
   async sendMessage(deviceId: string, to: string, text: string) {
     const sock = this.activeSockets.get(deviceId);
@@ -228,40 +244,48 @@ export class WhatsappService implements OnApplicationBootstrap {
       throw new BadRequestException(`Akses ke perangkat ${deviceId} ditolak (bukan milik tenant Anda).`);
     }
 
-    let formattedJid = to;
-    if (!to.includes('@')) {
-      formattedJid = `${to.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+    const cleanTo = to.trim();
+    let formattedJid = cleanTo;
+
+    if (!cleanTo.includes('@')) {
+      if (cleanTo.endsWith('lid')) {
+        formattedJid = `${cleanTo}@lid`;
+      } else {
+        formattedJid = `${cleanTo.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+      }
     }
 
-    // 1. Skema Pencegahan Blokir: Cek validitas nomor WhatsApp di server WA
-    try {
-      const [whatsappCheck] = await sock.onWhatsApp(formattedJid);
-      if (!whatsappCheck || !whatsappCheck.exists) {
-        const errorMsg = `Nomor ${to} tidak terdaftar di WhatsApp.`;
-        console.warn(`[WhatsApp] ${errorMsg}`);
-        
-        // Simpan log kegagalan ke database
-        try {
-          const logEntry = this.logRepo.create({
-            deviceId,
-            tenantId: device.tenantId,
-            phoneNumber: to.replace(/[^0-9]/g, ''),
-            message: `[GAGAL - BUKAN WHATSAPP] ${text}`,
-            direction: 'OUT',
-            messageId: 'INVALID_NUMBER',
-          });
-          await this.logRepo.save(logEntry);
-        } catch (dbErr) {
-          console.error(`[WhatsApp] Gagal mencatat pesan gagal ke DB:`, dbErr);
+    // 1. Skema Pencegahan Blokir: Cek validitas nomor WhatsApp HANYA untuk @s.whatsapp.net
+    if (formattedJid.endsWith('@s.whatsapp.net')) {
+      try {
+        const [whatsappCheck] = await sock.onWhatsApp(formattedJid);
+        if (!whatsappCheck || !whatsappCheck.exists) {
+          const errorMsg = `Nomor ${to} tidak terdaftar di WhatsApp.`;
+          console.warn(`[WhatsApp] ${errorMsg}`);
+          
+          // Simpan log kegagalan ke database
+          try {
+            const logEntry = this.logRepo.create({
+              deviceId,
+              tenantId: device.tenantId,
+              phoneNumber: formattedJid.split('@')[0],
+              message: `[GAGAL - BUKAN WHATSAPP] ${text}`,
+              direction: 'OUT',
+              messageId: 'INVALID_NUMBER',
+            });
+            await this.logRepo.save(logEntry);
+          } catch (dbErr) {
+            console.error(`[WhatsApp] Gagal mencatat pesan gagal ke DB:`, dbErr);
+          }
+          
+          throw new BadRequestException(errorMsg);
         }
-        
-        throw new BadRequestException(errorMsg);
+      } catch (checkErr) {
+        if (checkErr instanceof BadRequestException) {
+          throw checkErr;
+        }
+        console.warn(`[WhatsApp] Gagal melakukan pengecekan nomor WhatsApp untuk ${formattedJid}:`, checkErr.message);
       }
-    } catch (checkErr) {
-      if (checkErr instanceof BadRequestException) {
-        throw checkErr;
-      }
-      console.warn(`[WhatsApp] Gagal melakukan pengecekan nomor WhatsApp untuk ${formattedJid}:`, checkErr.message);
     }
 
     // 2. Skema Pencegahan Blokir: Simulasi mengetik dinamis (composing) berdasarkan panjang teks
@@ -281,7 +305,7 @@ export class WhatsappService implements OnApplicationBootstrap {
       const logEntry = this.logRepo.create({
         deviceId,
         tenantId: device.tenantId,
-        phoneNumber: to.replace(/[^0-9]/g, ''),
+        phoneNumber: formattedJid.endsWith('@s.whatsapp.net') ? formattedJid.split('@')[0] : formattedJid,
         message: text,
         direction: 'OUT',
         messageId: res.key.id || null,
@@ -363,17 +387,42 @@ export class WhatsappService implements OnApplicationBootstrap {
 
   /**
    * Mengambil riwayat log pesan untuk tenant saat ini
+   * dengan dukungan filter: direction, search nomor/pesan, deviceId
    */
-  async getMessageLogs(page = 1, limit = 20) {
+  async getMessageLogs(
+    page = 1,
+    limit = 20,
+    direction?: 'IN' | 'OUT',
+    search?: string,
+    deviceId?: string,
+  ) {
     const tenantId = this.tenantContext.getTenantId();
     const userRole = this.tenantContext.getRole();
 
     const qb = this.logRepo.createQueryBuilder('log');
 
-    // Jika bukan Super Admin, filter berdasarkan tenantId
+    // Filter berdasarkan tenant (kecuali Super Admin)
     if (userRole !== 'Super Admin') {
       if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
       qb.where('log.tenantId = :tenantId', { tenantId });
+    }
+
+    // Filter opsional: arah pesan (IN / OUT)
+    if (direction) {
+      qb.andWhere('log.direction = :direction', { direction });
+    }
+
+    // Filter opsional: pencarian nomor telepon atau isi pesan
+    if (search && search.trim()) {
+      qb.andWhere(
+        '(log.phoneNumber ILIKE :search OR log.message ILIKE :search)',
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    // Filter opsional: deviceId tertentu
+    if (deviceId && deviceId.trim()) {
+      qb.andWhere('log.deviceId = :deviceId', { deviceId: deviceId.trim() });
     }
 
     const [items, total] = await qb

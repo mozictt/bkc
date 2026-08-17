@@ -44,8 +44,11 @@ export class WhatsappController {
   async getLogs(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
+    @Query('direction') direction?: 'IN' | 'OUT',
+    @Query('search') search?: string,
+    @Query('deviceId') deviceId?: string,
   ) {
-    return await this.waService.getMessageLogs(+page, +limit);
+    return await this.waService.getMessageLogs(+page, +limit, direction, search, deviceId);
   }
 
   @Post('send')
