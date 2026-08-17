@@ -132,8 +132,7 @@ export class CompanyProfileService extends BaseTenantService<CompanyProfile> {
           'kelurahan.kecamatan.kabupaten',
           'kelurahan.kecamatan.kabupaten.provinsi',
         ],
-      }); 
-      console.log(profile);
+      });  
     }
 
     if (!profile) {
