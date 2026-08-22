@@ -27,6 +27,11 @@ export class CreateMenuDto {
   @IsNumber()
   parent_id?: number;
 
+  @ApiProperty({ example: 'Barang', description: 'Resource key permission yang dibutuhkan (cth: Barang, User, Menu)', required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  requiredResource?: string;
+
   @ApiProperty({ example: true, required: false })
   @IsOptional()
   @IsBoolean()

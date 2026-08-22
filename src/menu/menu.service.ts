@@ -84,22 +84,18 @@ export class MenuService {
     const qb = this.dataSource
       .getRepository(Menu)
       .createQueryBuilder('menu')
-      .leftJoinAndSelect('menu.children', 'children')
       .leftJoinAndSelect('menu.parent', 'parent');
 
     if (tenantId) {
       qb.andWhere('menu.tenantId = :tenantId', { tenantId });
     }
-    qb.andWhere('menu.parent is null '); 
-    qb.orderBy('menu.name', 'ASC');
 
-    const menus = await qb.getMany();
+    qb.orderBy('parent.id', 'ASC', 'NULLS FIRST')
+      .addOrderBy('menu.order_no', 'ASC')
+      .addOrderBy('menu.name', 'ASC');
 
-    menus.forEach(menu => {
-      if (menu.children && menu.children.length > 0) {
-        menu.children.sort((a, b) => a.name.localeCompare(b.name));
-      }
-    });
+    const flatMenus = await qb.getMany();
+    const menus = this.buildMenuTree(flatMenus);
 
     try {
       await this.redis.set(cacheKey, JSON.stringify(menus), 'EX', 3600);
@@ -115,17 +111,18 @@ export class MenuService {
 
     try {
       let targetRoleId = id;
+      let originalRoleTenantId: string | undefined = undefined;
 
-      // 🔍 Resolusi Role per-Tenant: Jika role ID berasal dari tenant lain (misal Master Tenant),
-      // temukan role dengan NAMA yang sama pada active tenant!
-      if (tenantId) {
-        const currentRole = await this.dataSource
-          .getRepository(Role)
-          .createQueryBuilder('role')
-          .where('role.id = :id', { id })
-          .getOne();
+      const currentRole = await this.dataSource
+        .getRepository(Role)
+        .createQueryBuilder('role')
+        .where('role.id = :id', { id })
+        .getOne();
 
-        if (currentRole && currentRole.tenantId !== tenantId) {
+      if (currentRole) {
+        originalRoleTenantId = currentRole.tenantId;
+
+        if (tenantId && currentRole.tenantId !== tenantId) {
           const matchingTenantRole = await this.dataSource
             .getRepository(Role)
             .createQueryBuilder('role')
@@ -139,12 +136,17 @@ export class MenuService {
         }
       }
 
-      // 1. Get all resources assigned to this role in active tenant
+      // 1. Get all resources assigned to this role in active tenant (or original role tenant)
+      const permissionWhere: any[] = [{ role: { id: targetRoleId } }];
+      if (tenantId) {
+        permissionWhere[0].tenantId = tenantId;
+        if (originalRoleTenantId && originalRoleTenantId !== tenantId) {
+          permissionWhere.push({ role: { id: targetRoleId }, tenantId: originalRoleTenantId });
+        }
+      }
+
       const permissions = await this.permissionRepo.find({
-        where: {
-          role: { id: targetRoleId },
-          tenantId: tenantId ? tenantId : undefined,
-        },
+        where: permissionWhere,
       });
 
       // 2. Query ALL Menus (tanpa filter allowedResources agar bisa digunakan untuk Role Management UI)
@@ -172,9 +174,12 @@ export class MenuService {
       const flatMenusWithPermissions = flatMenus.map(menu => {
         let accessLevel: AccessLevel | null = null;
         if (isSuperAdmin) {
-          accessLevel = AccessLevel.WRITE;
+          accessLevel = AccessLevel.FULL_AKSES;
         } else if (menu.requiredResource) {
-          const perm = permissions.find(p => p.resource === menu.requiredResource);
+          const targetReqResource = menu.requiredResource.trim().toLowerCase();
+          const perm = permissions.find(
+            p => p.resource && p.resource.trim().toLowerCase() === targetReqResource
+          );
           if (perm && perm.accessLevel) {
              accessLevel = perm.accessLevel;
           }
@@ -205,7 +210,9 @@ export class MenuService {
         icon: menu.icon,
         url: menu.url,
         order_no: menu.order_no,
-        is_visible: menu.is_visible,
+        is_active: menu.is_active ?? true,
+        is_visible: menu.is_visible ?? true,
+        requiredResource: menu.requiredResource || null,
         accessLevel: menu.accessLevel || null, 
         children: [],
       };
@@ -223,15 +230,17 @@ export class MenuService {
       }
     });
 
-    // Urutkan root menus berdasarkan nama ascending
-    rootMenus.sort((a, b) => a.name.localeCompare(b.name));
+    // Pengurutan rekursif berdasarkan order_no & nama di semua tingkatan submenu (Level 1, 2, 3, dst.)
+    const sortTree = (nodes: any[]) => {
+      nodes.sort((a, b) => (a.order_no ?? 1) - (b.order_no ?? 1) || a.name.localeCompare(b.name));
+      nodes.forEach((node) => {
+        if (node.children && node.children.length > 0) {
+          sortTree(node.children);
+        }
+      });
+    };
 
-    // Urutkan children dari masing-masing root menu berdasarkan nama ascending
-    rootMenus.forEach((menu) => {
-      if (menu.children && menu.children.length > 0) {
-        menu.children.sort((a, b) => a.name.localeCompare(b.name));
-      }
-    });
+    sortTree(rootMenus);
 
     return rootMenus;
   }

@@ -184,6 +184,24 @@ export const runMenuSeed = async (dataSource: DataSource) => {
       resource: 'Permission',
       accessLevel: AccessLevel.FULL_AKSES,
     },
+    // Requested Menu Permissions
+    ...[
+      'menu-album',
+      'menu-barang',
+      'menu-dashboard',
+      'menu-dokumen',
+      'menu-galery',
+      'menu-list-menu',
+      'menu-pegawai-list',
+      'menu-profil-pegawai',
+      'menu-profil-perusahaan',
+      'menu-role',
+      'menu-users-list',
+    ].map((resource) => ({
+      role: adminRole,
+      resource,
+      accessLevel: AccessLevel.FULL_AKSES,
+    })),
 
     // Staff Permissions (Hanya View/Akses Terbatas)
     {

@@ -46,8 +46,8 @@ export class MenuController {
   @Get()
   @RequirePermission('Menu', 'view')
   @ApiOperation({
-    summary: 'Ambil semua menu root',
-    description: 'Mengambil semua data menu tingkat teratas (parent is null) beserta anak-anaknya.',
+    summary: 'Ambil hierarki menu (Multi-level)',
+    description: 'Mengambil semua data menu beserta hierarki submenunya secara rekursif hingga kedalaman tanpa batas (Level 1, Level 2, Level 3, dst.).',
   })
   @ApiResponse({ status: 200, description: 'Daftar menu berhasil diambil.' })
   findAll() {
