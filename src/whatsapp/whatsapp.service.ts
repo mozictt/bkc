@@ -53,10 +53,25 @@ export class WhatsappService implements OnApplicationBootstrap {
    * Helper terpusat untuk menyimpan media (gambar, video, dokumen) dari WhatsApp.
    * Menghindari duplikasi kode (DRY Principle) antar proses sync dan live message.
    */
-  private async saveWhatsAppMedia(buffer: Buffer, mime: string, tenantId: string, prefix = 'wa-media'): Promise<string> {
+  private async saveWhatsAppMedia(buffer: Buffer, mime: string, tenantId: string, prefix = 'wa-media', originalFileName?: string): Promise<string> {
     const isMedia = mime.startsWith('image/') || mime.startsWith('video/');
     const ext = mime.split('/')[1]?.split(';')[0] || (isMedia ? 'jpg' : 'pdf');
-    const fileName = `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`;
+    
+    let baseName = prefix;
+    let finalExt = ext;
+
+    if (originalFileName) {
+      const lastDot = originalFileName.lastIndexOf('.');
+      if (lastDot !== -1) {
+        baseName = originalFileName.substring(0, lastDot).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').toLowerCase();
+        finalExt = originalFileName.substring(lastDot + 1).replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || ext;
+      } else {
+        baseName = originalFileName.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').toLowerCase();
+      }
+    }
+    
+    baseName = baseName.replace(/-+$/, '').substring(0, 50) || prefix;
+    const fileName = `${baseName}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${finalExt}`;
     
     const tenantSlug = await this.getTenantSlug(tenantId);
     const { absoluteFolder, relativeFolder } = UploadStorageHelper.getUploadPath(
@@ -268,7 +283,8 @@ export class WhatsappService implements OnApplicationBootstrap {
                   );
                   if (buffer) {
                     const mime = imageMsg?.mimetype || videoMsg?.mimetype || docMsg?.mimetype || 'image/jpeg';
-                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, tenantId as string, 'wa-history');
+                    const originalName = docMsg?.fileName || docMsg?.title || undefined;
+                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, tenantId as string, 'wa-history', originalName);
                   }
                 } catch (mediaErr) {
                   console.warn(`[WhatsApp] Gagal mengunduh media dari pesan history ${msgId}:`, mediaErr.message);
@@ -518,7 +534,8 @@ export class WhatsappService implements OnApplicationBootstrap {
                   );
                   if (buffer) {
                     const mime = imageMsg?.mimetype || videoMsg?.mimetype || docMsg?.mimetype || 'image/jpeg';
-                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, dev.tenantId as string, 'wa-media');
+                    const originalName = docMsg?.fileName || docMsg?.title || undefined;
+                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, dev.tenantId as string, 'wa-media', originalName);
                   }
                 } catch (mediaErr) {
                   console.warn('[WhatsApp] Gagal mengunduh media dari pesan WA:', mediaErr);
@@ -765,6 +782,7 @@ export class WhatsappService implements OnApplicationBootstrap {
     // 3. Konstruksi Payload Pesan (Teks Biasa vs Media)
     let payload: any = { text: text || '' };
     let mediaTypeLabel = '';
+    let finalMediaUrlToSave: string | null = null;
 
     if (mediaFileOrUrl) {
       let mediaContent: any;
@@ -772,11 +790,32 @@ export class WhatsappService implements OnApplicationBootstrap {
       let fileName = originalFileName || 'document.pdf';
 
       if (typeof mediaFileOrUrl === 'string') {
-        const cleanPath = mediaFileOrUrl.replace(/^\/(gallery\/media|documents\/download|uploads)\//, '');
-        const resolvedPath = UploadStorageHelper.resolveFileForStreaming(cleanPath, 'gallery', 'documents');
-        const finalUrl = resolvedPath || mediaFileOrUrl;
+        let normalizedUrl = mediaFileOrUrl;
+        
+        // Buang origin (e.g., http://localhost:3000) jika ada
+        try {
+          const urlObj = new URL(normalizedUrl);
+          normalizedUrl = urlObj.pathname + urlObj.search;
+        } catch (e) {
+          // Jika bukan absolute URL, biarkan saja
+        }
+        
+        // Handle frontend Nuxt proxy paths
+        if (normalizedUrl.includes('/api/proxy/pos/gallery/')) {
+           normalizedUrl = normalizedUrl.replace(/\/api\/proxy\/pos\/gallery\//, '/gallery/media/');
+        } else if (normalizedUrl.includes('/api/proxy/pos/documents/')) {
+           normalizedUrl = normalizedUrl.replace(/\/api\/proxy\/pos\/documents\//, '/documents/download/');
+        } else if (normalizedUrl.includes('/api/proxy/')) {
+           // Fallback general proxy
+           normalizedUrl = normalizedUrl.replace(/\/api\/proxy\/[^/]+\//, '/');
+        }
+
+        const cleanPath = normalizedUrl.replace(/^\/(gallery\/media|documents\/download|whatsapp\/media|uploads)\//, '');
+        const resolvedPath = UploadStorageHelper.resolveFileForStreaming(cleanPath, 'gallery', 'documents', 'whatsapp/media');
+        const finalUrl = resolvedPath || normalizedUrl;
 
         mediaContent = { url: finalUrl };
+        finalMediaUrlToSave = normalizedUrl; // Simpan path asli backend untuk log
         if (finalUrl.endsWith('.pdf')) mimeType = 'application/pdf';
         else if (finalUrl.match(/\.(png|jpg|jpeg|webp|gif)$/i)) mimeType = 'image/jpeg';
         else if (finalUrl.match(/\.(mp4|mkv|avi|mov)$/i)) mimeType = 'video/mp4';
@@ -784,6 +823,11 @@ export class WhatsappService implements OnApplicationBootstrap {
         mediaContent = mediaFileOrUrl.buffer ? mediaFileOrUrl.buffer : { url: mediaFileOrUrl.path };
         mimeType = mediaFileOrUrl.mimetype;
         fileName = mediaFileOrUrl.originalname;
+        
+        // Simpan file ke storage server untuk history OUT
+        if (mediaFileOrUrl.buffer && device.tenantId) {
+          finalMediaUrlToSave = await this.saveWhatsAppMedia(mediaFileOrUrl.buffer, mimeType, device.tenantId, 'wa-out', fileName);
+        }
       }
 
       if (mimeType.startsWith('image/')) {
@@ -928,6 +972,7 @@ export class WhatsappService implements OnApplicationBootstrap {
         tenantId: device.tenantId,
         phoneNumber: formattedJid.endsWith('@s.whatsapp.net') ? formattedJid.split('@')[0] : formattedJid,
         message: mediaTypeLabel ? `[${mediaTypeLabel}] ${text || ''}` : text,
+        mediaUrl: finalMediaUrlToSave,
         direction: 'OUT',
         messageId: res?.key?.id || null,
         participantJid: formattedJid.endsWith('@g.us') ? outMyJid : null,
