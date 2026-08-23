@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Delete, Put, Body, Param, Query, NotFoundException, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Put, Body, Param, Query, NotFoundException, UseInterceptors, UploadedFile, BadRequestException, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { WhatsappService } from './whatsapp.service';
 import { ApiTags, ApiOperation, ApiBody, ApiConsumes, ApiQuery } from '@nestjs/swagger';
@@ -169,5 +170,15 @@ export class WhatsappController {
   ) {
     if (!deviceId) throw new BadRequestException('deviceId wajib diisi.');
     return await this.waService.getGroupMetadata(deviceId, groupId);
+  }
+
+  @Get('media/*path')
+  @ApiOperation({ summary: 'Stream / ambil file media WhatsApp berdasarkan relative path' })
+  async getMedia(
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const rawPath = (req.params as any).path || req.params[0] || req.params['0'] || '';
+    return this.waService.streamMedia(rawPath, req, res);
   }
 }

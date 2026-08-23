@@ -55,15 +55,14 @@ export class WhatsappService implements OnApplicationBootstrap {
    */
   private async saveWhatsAppMedia(buffer: Buffer, mime: string, tenantId: string, prefix = 'wa-media'): Promise<string> {
     const isMedia = mime.startsWith('image/') || mime.startsWith('video/');
-    const moduleFolder = isMedia ? 'gallery' : 'documents';
     const ext = mime.split('/')[1]?.split(';')[0] || (isMedia ? 'jpg' : 'pdf');
     const fileName = `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`;
     
     const tenantSlug = await this.getTenantSlug(tenantId);
     const { absoluteFolder, relativeFolder } = UploadStorageHelper.getUploadPath(
       tenantSlug,
-      moduleFolder,
-      'whatsapp-media'
+      'whatsapp',
+      'media'
     );
     
     UploadStorageHelper.ensureDirectoryExists(absoluteFolder);
@@ -71,9 +70,7 @@ export class WhatsappService implements OnApplicationBootstrap {
     fs.writeFileSync(filePath, buffer);
     
     const relativeStoredPath = path.join(relativeFolder, fileName).replace(/\\/g, '/');
-    return isMedia
-      ? `/gallery/media/${relativeStoredPath}`
-      : `/documents/download/${relativeStoredPath}`;
+    return `/whatsapp/media/${relativeStoredPath}`;
   }
 
   async onApplicationBootstrap() {
@@ -1159,18 +1156,31 @@ export class WhatsappService implements OnApplicationBootstrap {
       }
     }
 
+    qb.leftJoinAndMapOne(
+      'log.contactInfo',
+      'whatsapp_contacts',
+      'contact',
+      'contact.phone_number = log.phoneNumber AND contact.tenant_id = log.tenantId'
+    );
+
     const [items, total] = await qb
       .orderBy('log.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
 
-    const mappedItems = items.map((item) => {
+    const mappedItems = items.map((item: any) => {
       if (!item.chatType) {
         const phone = item.phoneNumber || '';
         const isGroup = phone.endsWith('@g.us') || (phone.includes('-') && !phone.startsWith('62') && !phone.startsWith('08'));
         item.chatType = isGroup ? 'GROUP' : 'PERSONAL';
       }
+      
+      // Inject contact name if joined
+      if (item.contactInfo) {
+        item.senderName = item.contactInfo.name || item.contactInfo.push_name || item.contactInfo.pushName;
+      }
+      
       return item;
     });
 
@@ -1438,5 +1448,71 @@ export class WhatsappService implements OnApplicationBootstrap {
     const unreadKey = `wa:unread:tenant:${tenantId}`;
     const val = await this.redis.get(unreadKey);
     return { count: val ? parseInt(val, 10) : 0 };
+  }
+
+  /**
+   * Melakukan streaming file media WhatsApp ke client (Frontend/Browser)
+   */
+  streamMedia(rawPath: string, req: any, res: any) {
+    const filePath = UploadStorageHelper.resolveFileForStreaming(rawPath, 'whatsapp');
+
+    if (!filePath) {
+      throw new NotFoundException('File media WhatsApp tidak ditemukan');
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    
+    const ext = path.extname(filePath).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+    else if (ext === '.png') contentType = 'image/png';
+    else if (ext === '.webp') contentType = 'image/webp';
+    else if (ext === '.mp4') contentType = 'video/mp4';
+    else if (ext === '.webm') contentType = 'video/webm';
+    else if (ext === '.pdf') contentType = 'application/pdf';
+
+    const MAX_CHUNK_SIZE = 3 * 1024 * 1024; // 3MB chunk
+
+    if (range && contentType.startsWith('video/')) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      
+      if (isNaN(start) || start >= fileSize || start < 0) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+      if (isNaN(end) || end - start + 1 > MAX_CHUNK_SIZE) end = start + MAX_CHUNK_SIZE - 1;
+      if (end >= fileSize) end = fileSize - 1;
+      if (start > end) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunkSize = end - start + 1;
+      const stream = fs.createReadStream(filePath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
+
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
+
+      fs.createReadStream(filePath).pipe(res);
+    }
   }
 }
