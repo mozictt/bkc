@@ -20,4 +20,16 @@ export class WhatsappLog extends TenantBaseEntity {
 
   @Column({ name: 'message_id', type: 'varchar', length: 100, nullable: true })
   messageId: string | null;
+
+  @Column({ name: 'media_url', type: 'varchar', length: 255, nullable: true })
+  mediaUrl: string | null;
+
+  @Column({ name: 'participant_jid', type: 'varchar', length: 100, nullable: true })
+  participantJid: string | null;
+
+  @Column({ name: 'quoted_message_id', type: 'varchar', length: 100, nullable: true })
+  quotedMessageId: string | null;
+
+  @Column({ name: 'chat_type', type: 'varchar', length: 20, default: 'PERSONAL' })
+  chatType: 'PERSONAL' | 'GROUP';
 }

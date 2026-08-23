@@ -1,10 +1,11 @@
 import { Injectable, OnApplicationBootstrap, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
@@ -12,25 +13,77 @@ import * as fs from 'fs';
 import pino from 'pino';
 import { WhatsappDevice } from './entities/whatsapp-device.entity';
 import { WhatsappLog } from './entities/whatsapp-log.entity';
+import { WhatsappContact } from './entities/whatsapp-contact.entity';
+import { Tenant } from '../entities/tenant.entity';
 import { TenantContextService } from '../common/tenant/tenant-context.service';
+import { UploadStorageHelper } from '../common/utils/upload-storage.util';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+import { WhatsappGateway } from './whatsapp.gateway';
 
 @Injectable()
 export class WhatsappService implements OnApplicationBootstrap {
   private activeSockets = new Map<string, WASocket>();
   private qrCodes = new Map<string, string>(); // Menyimpan QR Code terbaru per device
   private readonly sessionBaseDir = path.join(process.cwd(), 'storage', 'whatsapp-sessions');
+  private tenantSlugCache = new Map<string, string>();
 
   constructor(
     @InjectRepository(WhatsappDevice)
     private readonly deviceRepo: Repository<WhatsappDevice>,
     @InjectRepository(WhatsappLog)
     private readonly logRepo: Repository<WhatsappLog>,
+    @InjectRepository(WhatsappContact)
+    private readonly contactRepo: Repository<WhatsappContact>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
     private readonly tenantContext: TenantContextService,
+    @InjectRedis() private readonly redis: Redis,
+    private readonly wsGateway: WhatsappGateway,
   ) {}
+
+  /**
+   * Resolusi slug tenant terpusat menggunakan UploadStorageHelper global.
+   */
+  async getTenantSlug(tenantId: string): Promise<string> {
+    return UploadStorageHelper.resolveSlug(this.tenantRepo, tenantId, this.tenantContext);
+  }
+
+  /**
+   * Helper terpusat untuk menyimpan media (gambar, video, dokumen) dari WhatsApp.
+   * Menghindari duplikasi kode (DRY Principle) antar proses sync dan live message.
+   */
+  private async saveWhatsAppMedia(buffer: Buffer, mime: string, tenantId: string, prefix = 'wa-media'): Promise<string> {
+    const isMedia = mime.startsWith('image/') || mime.startsWith('video/');
+    const moduleFolder = isMedia ? 'gallery' : 'documents';
+    const ext = mime.split('/')[1]?.split(';')[0] || (isMedia ? 'jpg' : 'pdf');
+    const fileName = `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`;
+    
+    const tenantSlug = await this.getTenantSlug(tenantId);
+    const { absoluteFolder, relativeFolder } = UploadStorageHelper.getUploadPath(
+      tenantSlug,
+      moduleFolder,
+      'whatsapp-media'
+    );
+    
+    UploadStorageHelper.ensureDirectoryExists(absoluteFolder);
+    const filePath = path.join(absoluteFolder, fileName);
+    fs.writeFileSync(filePath, buffer);
+    
+    const relativeStoredPath = path.join(relativeFolder, fileName).replace(/\\/g, '/');
+    return isMedia
+      ? `/gallery/media/${relativeStoredPath}`
+      : `/documents/download/${relativeStoredPath}`;
+  }
 
   async onApplicationBootstrap() {
     if (!fs.existsSync(this.sessionBaseDir)) {
       fs.mkdirSync(this.sessionBaseDir, { recursive: true });
+    }
+
+    const uploadsBaseDir = path.join(process.cwd(), 'storage', 'uploads');
+    if (!fs.existsSync(uploadsBaseDir)) {
+      fs.mkdirSync(uploadsBaseDir, { recursive: true });
     }
 
     // Auto-reconnect seluruh device yang terdaftar di database
@@ -41,6 +94,18 @@ export class WhatsappService implements OnApplicationBootstrap {
         this.initSession(device.id).catch((err) => {
           console.error(`[WhatsApp] Gagal auto-reconnect WhatsApp device ${device.id}:`, err);
         });
+      }
+
+      // Auto-cleanup perbaikan chatType log lama jika ber-JID grup
+      try {
+        await this.logRepo
+          .createQueryBuilder()
+          .update(WhatsappLog)
+          .set({ chatType: 'GROUP' })
+          .where("phoneNumber LIKE '%@g.us' AND (chatType IS NULL OR chatType = 'PERSONAL')")
+          .execute();
+      } catch (e) {
+        // ignore
       }
     } catch (err) {
       console.error(`[WhatsApp] Gagal memuat data perangkat saat startup:`, err);
@@ -57,7 +122,7 @@ export class WhatsappService implements OnApplicationBootstrap {
     if (!tenantId) {
       const device = await this.deviceRepo.findOneBy({ id: deviceId });
       if (device) {
-        tenantId = device.tenantId;
+        tenantId = device.tenantId || undefined;
       }
     }
 
@@ -100,10 +165,148 @@ export class WhatsappService implements OnApplicationBootstrap {
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Auto-sync kontak dari WhatsApp ke Database Master Kontak
+    sock.ev.on('contacts.upsert', async (contacts) => {
+      for (const c of contacts) {
+        if (!c.id || !c.id.includes('@s.whatsapp.net')) continue;
+        const phoneNumber = c.id.split('@')[0];
+        try {
+          let contact = await this.contactRepo.findOneBy({ tenantId, jid: c.id });
+          if (!contact) {
+            contact = this.contactRepo.create({
+              tenantId,
+              jid: c.id,
+              phoneNumber,
+              name: c.name || c.notify || null,
+              pushName: c.notify || null,
+            } as any) as unknown as WhatsappContact;
+          } else {
+            if (c.name) contact.name = c.name;
+            if (c.notify) contact.pushName = c.notify;
+          }
+          await this.contactRepo.save(contact);
+        } catch (e) {
+          // ignore race condition
+        }
+      }
+    });
+
+    // Sinkronisasi riwayat awal dari WhatsApp (Chat, Kontak, dan Pesan Historis)
+    sock.ev.on('messaging-history.set', async ({ chats, contacts, messages, isLatest }) => {
+      console.log(`[WhatsApp] Menerima event sinkronisasi riwayat (${chats.length} chat, ${contacts.length} kontak, ${messages.length} pesan). isLatest: ${isLatest}`);
+
+      // 1. Sinkronisasi Kontak secara asinkron di background untuk efisiensi
+      setImmediate(async () => {
+        try {
+          for (const c of contacts) {
+            if (!c.id || !c.id.includes('@s.whatsapp.net')) continue;
+            const phoneNumber = c.id.split('@')[0];
+            let contact = await this.contactRepo.findOneBy({ tenantId, jid: c.id });
+            if (!contact) {
+              contact = this.contactRepo.create({
+                tenantId,
+                jid: c.id,
+                phoneNumber,
+                name: c.name || c.notify || null,
+                pushName: c.notify || null,
+              } as any) as unknown as WhatsappContact;
+            } else {
+              if (c.name) contact.name = c.name;
+              if (c.notify) contact.pushName = c.notify;
+            }
+            await this.contactRepo.save(contact);
+          }
+          console.log(`[WhatsApp] Berhasil mensinkronisasi ${contacts.length} kontak historis.`);
+        } catch (e) {
+          console.error('[WhatsApp] Error sync kontak historis:', e.message);
+        }
+      });
+
+      // 2. Sinkronisasi Chat & Pesan Historis (Termasuk pemrosesan media/dokumen)
+      setImmediate(async () => {
+        try {
+          let syncedCount = 0;
+          for (const msg of messages) {
+            if (!msg.message || msg.key.fromMe) continue;
+            
+            const imageMsg = msg.message?.imageMessage;
+            const videoMsg = msg.message?.videoMessage;
+            const docMsg = msg.message?.documentMessage;
+            const audioMsg = msg.message?.audioMessage;
+            const stickerMsg = msg.message?.stickerMessage;
+
+            let textContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || imageMsg?.caption || videoMsg?.caption || docMsg?.caption || '';
+
+            if (!textContent) {
+              if (imageMsg) textContent = '[Gambar]';
+              else if (videoMsg) textContent = '[Video]';
+              else if (docMsg) textContent = '[Dokumen]';
+              else if (audioMsg) textContent = '[Audio]';
+              else if (stickerMsg) textContent = '[Sticker]';
+            }
+
+            if (!textContent && !imageMsg && !videoMsg && !docMsg) continue;
+
+            const remoteJid = msg.key.remoteJid || '';
+            const isGroup = remoteJid.endsWith('@g.us');
+            const senderPhone = remoteJid.split('@')[0];
+            
+            const msgId = msg.key.id;
+            if (!msgId) continue;
+
+            const existing = await this.logRepo.findOneBy({ messageId: msgId, deviceId });
+            if (!existing) {
+              // Unduh media secara asinkron untuk pesan historis
+              let mediaUrl: string | null = null;
+              if (imageMsg || videoMsg || docMsg) {
+                try {
+                  const buffer = await downloadMediaMessage(
+                    msg,
+                    'buffer',
+                    {},
+                    {
+                      logger: pino({ level: 'silent' }) as any,
+                      reuploadRequest: sock.updateMediaMessage,
+                    }
+                  );
+                  if (buffer) {
+                    const mime = imageMsg?.mimetype || videoMsg?.mimetype || docMsg?.mimetype || 'image/jpeg';
+                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, tenantId as string, 'wa-history');
+                  }
+                } catch (mediaErr) {
+                  console.warn(`[WhatsApp] Gagal mengunduh media dari pesan history ${msgId}:`, mediaErr.message);
+                }
+              }
+
+              const logEntry = this.logRepo.create({
+                deviceId,
+                tenantId,
+                phoneNumber: isGroup ? remoteJid : senderPhone,
+                message: textContent,
+                mediaUrl,
+                direction: 'IN',
+                messageId: msgId,
+                chatType: isGroup ? 'GROUP' : 'PERSONAL',
+              });
+              await this.logRepo.save(logEntry);
+              syncedCount++;
+            }
+          }
+          console.log(`[WhatsApp] Berhasil mensinkronisasi ${syncedCount} pesan historis (termasuk media).`);
+        } catch (e) {
+          console.error('[WhatsApp] Error sync pesan historis:', e.message);
+        }
+      });
+    });
+
+    let isNewLogin = false;
+
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        // Jika sistem menghasilkan QR, berarti ini adalah sesi login baru (fresh start)
+        isNewLogin = true;
         this.qrCodes.set(deviceId, qr);
       }
 
@@ -128,66 +331,264 @@ export class WhatsappService implements OnApplicationBootstrap {
 
         console.log(`✅ WhatsApp Device ${deviceId} BERHASIL TERHUBUNG (${phoneNumber})`);
 
+        // Jika ini adalah login baru (hasil scan QR), reset otomatis data historis beserta file medianya
+        if (isNewLogin) {
+          try {
+            await this.logRepo.delete({ tenantId });
+            await this.contactRepo.delete({ tenantId });
+
+            // Hapus file media secara fisik dari storage
+            const tenantSlug = await this.getTenantSlug(tenantId as string);
+            const { absoluteFolder: galleryFolder } = UploadStorageHelper.getUploadPath(tenantSlug, 'gallery', 'whatsapp-media');
+            const { absoluteFolder: docFolder } = UploadStorageHelper.getUploadPath(tenantSlug, 'documents', 'whatsapp-media');
+            
+            if (fs.existsSync(galleryFolder)) fs.rmSync(galleryFolder, { recursive: true, force: true });
+            if (fs.existsSync(docFolder)) fs.rmSync(docFolder, { recursive: true, force: true });
+
+            console.log(`[WhatsApp] Data riwayat, kontak, dan file media otomatis direset karena Login QR baru.`);
+          } catch (err) {
+            console.error(`[WhatsApp] Gagal auto-reset data setelah login:`, err);
+          }
+          isNewLogin = false;
+        }
+
         // Update status perangkat dan nomor telepon di DB
         await this.deviceRepo.update(deviceId, { status: 'connected', phoneNumber });
       }
     });
 
-    // Menangani pesan masuk
+    // Menangani pesan masuk & keluar (sync percakapan)
     sock.ev.on('messages.upsert', async (m) => {
-      if (m.type === 'notify') {
+      if (m.type === 'notify' || m.type === 'append') {
         for (const msg of m.messages) {
+          const imageMsg = msg.message?.imageMessage;
+          const videoMsg = msg.message?.videoMessage;
+          const docMsg = msg.message?.documentMessage;
+          const audioMsg = msg.message?.audioMessage;
+          const stickerMsg = msg.message?.stickerMessage;
+
           // Ekstrak konten teks dari berbagai kemungkinan tipe pesan Baileys
-          const textContent =
+          let textContent =
             msg.message?.conversation ||
             msg.message?.extendedTextMessage?.text ||
-            msg.message?.imageMessage?.caption ||
-            msg.message?.videoMessage?.caption ||
+            imageMsg?.caption ||
+            videoMsg?.caption ||
+            docMsg?.caption ||
             '';
 
-          if (!msg.key.fromMe && textContent) {
-            // Extract sender JID: prioritize real phone number (@s.whatsapp.net) from participant or remoteJid
-            let rawSender = msg.key.remoteJid || '';
-            if (msg.key.participant && msg.key.participant.includes('@s.whatsapp.net')) {
-              rawSender = msg.key.participant;
-            } else if (msg.participant && msg.participant.includes('@s.whatsapp.net')) {
-              rawSender = msg.participant;
-            }
+          if (!textContent) {
+            if (imageMsg) textContent = '[Gambar]';
+            else if (videoMsg) textContent = '[Video]';
+            else if (docMsg) textContent = '[Dokumen]';
+            else if (audioMsg) textContent = '[Audio]';
+            else if (stickerMsg) textContent = '[Sticker]';
+          }
 
-            let senderNumber = '';
-            if (rawSender.includes('@s.whatsapp.net')) {
-              senderNumber = rawSender.split('@')[0];
-            } else if (rawSender.includes('@lid')) {
-              // Store full JID for LID addresses so reply functionality can target @lid
-              senderNumber = rawSender;
+          if (!textContent && !imageMsg && !videoMsg && !docMsg) continue;
+
+          // Ekstrak ID pesan yang dikutip (jika pesan ini merupakan balasan/reply)
+          const contextInfo = msg.message?.extendedTextMessage?.contextInfo || imageMsg?.contextInfo || videoMsg?.contextInfo || docMsg?.contextInfo;
+          const incomingQuotedMsgId: string | null = contextInfo?.stanzaId || null;
+
+          const dev = await this.deviceRepo.findOneBy({ id: deviceId });
+          if (!dev) continue;
+
+          // Extract sender/recipient JID & Standarisasi Nomor Telepon
+          const remoteJid = msg.key.remoteJid || '';
+          if (remoteJid.includes('@lid') || remoteJid.startsWith('1415')) {
+            console.log('--- LID MESSAGE PAYLOAD ---', JSON.stringify(msg, null, 2));
+          }
+          
+          let senderJid = remoteJid;
+          
+          if (!msg.key.fromMe) {
+            const myPhoneNum = sock.user?.id ? sock.user.id.split(':')[0].split('@')[0] : '';
+            
+            // Prioritas 1: Gunakan remoteJidAlt jika tersedia (Baileys menyimpan nomor asli di sini untuk pesan iklan/LID)
+            if ((msg.key as any).remoteJidAlt && typeof (msg.key as any).remoteJidAlt === 'string') {
+               senderJid = (msg.key as any).remoteJidAlt;
             } else {
-              senderNumber = rawSender.split('@')[0] || rawSender;
+               // Prioritas 2: Cek participant (untuk kasus grup atau edge-cases tertentu)
+               const participant = msg.key.participant || msg.participant || '';
+               const participantNum = participant.split(':')[0].split('@')[0];
+               if (participant && participant.includes('@s.whatsapp.net') && participantNum !== myPhoneNum) {
+                 senderJid = participant;
+               }
             }
+          }
 
-            console.log(`💬 WhatsApp [Device: ${deviceId}] dari ${senderNumber}: ${textContent}`);
+          const isGroupMessage = remoteJid.endsWith('@g.us');
+          let groupSenderLabel = '';
 
-            // Simpan riwayat pesan masuk ke database (IN)
-            try {
-              const dev = await this.deviceRepo.findOneBy({ id: deviceId });
-              if (dev) {
-                const logEntry = this.logRepo.create({
-                  deviceId,
-                  tenantId: dev.tenantId,
-                  phoneNumber: senderNumber,
-                  message: textContent,
-                  direction: 'IN',
-                  messageId: msg.key.id || null,
-                });
-                await this.logRepo.save(logEntry);
+          if (isGroupMessage) {
+            const participantJid = msg.key.participant || msg.participant || '';
+            if (participantJid) {
+              const senderPhone = participantJid.split('@')[0];
+              const pushName = msg.pushName || '';
+
+              let realPhoneNumber = senderPhone;
+              let savedName = '';
+
+              try {
+                const cleanLidJid = participantJid.includes('@') ? participantJid : `${participantJid}@lid`;
+                const linkedContact = await this.findLinkedContactForLid(
+                  dev.tenantId as string,
+                  cleanLidJid,
+                  pushName
+                );
+
+                if (linkedContact) {
+                  if (linkedContact.name) savedName = linkedContact.name;
+                  else if (linkedContact.pushName) savedName = linkedContact.pushName;
+
+                  if (
+                    linkedContact.phoneNumber &&
+                    !linkedContact.phoneNumber.includes('@lid') &&
+                    !linkedContact.phoneNumber.startsWith('1415')
+                  ) {
+                    realPhoneNumber = linkedContact.phoneNumber;
+                  }
+                } else {
+                  const existingContact = await this.contactRepo.findOneBy({
+                    tenantId: dev.tenantId as string,
+                    phoneNumber: senderPhone,
+                  });
+                  if (existingContact?.name) savedName = existingContact.name;
+                }
+              } catch (e) {
+                // ignore
               }
-            } catch (dbErr) {
-              console.error(`[WhatsApp] Gagal mencatat pesan masuk ke DB:`, dbErr);
-            }
 
-            // Contoh chatbot interaktif sederhana jika user mengirim pesan "/ping"
-            if (textContent.trim().toLowerCase() === '/ping') {
-              await this.sendMessage(deviceId, rawSender || senderNumber, 'pong! Koneksi aktif.');
+              const displayName = savedName || pushName;
+              const isLidNumber = realPhoneNumber.length >= 14 || realPhoneNumber.startsWith('1415');
+
+              if (displayName && isLidNumber) {
+                groupSenderLabel = displayName;
+              } else if (displayName && !isLidNumber) {
+                groupSenderLabel = `${displayName} (${realPhoneNumber})`;
+              } else {
+                groupSenderLabel = realPhoneNumber;
+              }
             }
+          }
+
+          // Standarisasi penentuan phoneNum & chatType
+          let phoneNum = '';
+          if (isGroupMessage) {
+            phoneNum = remoteJid;
+          } else {
+            // Pesan Pribadi: Gunakan senderJid (nomor lawan chat murni)
+            const cleanRemote = senderJid.split(':')[0].split('@')[0];
+            phoneNum = cleanRemote.replace(/[^0-9]/g, '');
+            if (!phoneNum && senderJid.includes('@lid')) {
+              phoneNum = senderJid;
+            }
+          }
+
+          if (!phoneNum || phoneNum.includes('status@broadcast')) continue;
+
+          if (isGroupMessage && !msg.key.fromMe) {
+            const fallbackSender = msg.key.participant || msg.participant || '';
+            const senderPhoneOnly = fallbackSender ? fallbackSender.split('@')[0] : 'Anggota Grup';
+            const finalLabel = groupSenderLabel || senderPhoneOnly;
+            textContent = `[${finalLabel}]: ${textContent}`;
+          }
+
+          try {
+            if (dev) {
+              const msgId = msg.key.id || null;
+              
+              // Cek apakah pesan ini sudah tercatat sebelumnya (cegat duplikasi)
+              if (msgId) {
+                const existing = await this.logRepo.findOneBy({ messageId: msgId, deviceId });
+                if (existing) continue;
+              }
+
+              const isFromMe = Boolean(msg.key.fromMe);
+              
+              // Unduh media jika pesan berupa Gambar, Video, atau Dokumen
+              let mediaUrl: string | null = null;
+              if (imageMsg || videoMsg || docMsg) {
+                try {
+                  const buffer = await downloadMediaMessage(
+                    msg,
+                    'buffer',
+                    {},
+                    {
+                      logger: pino({ level: 'silent' }) as any,
+                      reuploadRequest: sock.updateMediaMessage,
+                    }
+                  );
+                  if (buffer) {
+                    const mime = imageMsg?.mimetype || videoMsg?.mimetype || docMsg?.mimetype || 'image/jpeg';
+                    mediaUrl = await this.saveWhatsAppMedia(buffer, mime, dev.tenantId as string, 'wa-media');
+                  }
+                } catch (mediaErr) {
+                  console.warn('[WhatsApp] Gagal mengunduh media dari pesan WA:', mediaErr);
+                }
+              }
+
+              // Tautkan LID (atau nomor LID 15 digit seperti 107593326416118) ke kontak nomor HP yang valid jika ada
+              let finalPhoneNum = phoneNum;
+              const isLid = remoteJid.includes('@lid') || phoneNum.includes('@lid') || (phoneNum.length >= 14 && (phoneNum.startsWith('107') || phoneNum.startsWith('1415')));
+              if (isLid) {
+                const cleanLidJid = remoteJid.includes('@') ? remoteJid : `${phoneNum}@lid`;
+                const pushName = msg.pushName || undefined;
+                const linkedContact = await this.findLinkedContactForLid(dev.tenantId as string, cleanLidJid, pushName);
+                if (linkedContact && linkedContact.phoneNumber && !linkedContact.phoneNumber.includes('@lid') && linkedContact.phoneNumber.length < 14) {
+                  finalPhoneNum = linkedContact.phoneNumber.replace(/[^0-9]/g, '');
+                }
+              }
+
+              let realGroupParticipantJid: string | null = null;
+              if (isGroupMessage) {
+                const rawParticipant = msg.key.participant || msg.participant || '';
+                if (rawParticipant && !rawParticipant.includes('120363') && !rawParticipant.endsWith('@g.us')) {
+                  realGroupParticipantJid = rawParticipant.split(':')[0];
+                }
+              }
+
+              const logEntry = this.logRepo.create({
+                deviceId,
+                tenantId: dev.tenantId,
+                phoneNumber: finalPhoneNum,
+                message: textContent,
+                mediaUrl,
+                direction: isFromMe ? 'OUT' : 'IN',
+                messageId: msgId,
+                participantJid: realGroupParticipantJid,
+                quotedMessageId: incomingQuotedMsgId,
+                chatType: isGroupMessage ? 'GROUP' : 'PERSONAL',
+              });
+              await this.logRepo.save(logEntry);
+
+              console.log(
+                `💬 WhatsApp [Device: ${deviceId}] [${isFromMe ? 'OUT' : 'IN'}] ${finalPhoneNum} (${phoneNum}): ${textContent}`
+              );
+
+              // Otomatis sinkronkan/upsert ke master kontak jika belum ada
+              if (!isFromMe) {
+                const pushName = msg.pushName || undefined;
+                this.upsertContactFromMessage(dev.tenantId as string, senderJid, pushName);
+                
+                // NOTIFICATION: Tambah hitungan pesan belum dibaca di Redis
+                try {
+                  const tenantIdStr = dev.tenantId as string;
+                  const unreadKey = `wa:unread:tenant:${tenantIdStr}`;
+                  const currentUnread = await this.redis.incr(unreadKey);
+                  this.wsGateway.emitUnreadUpdate(tenantIdStr, currentUnread);
+                } catch (redisErr) {
+                  console.warn('[WhatsApp] Gagal memperbarui Redis unread count:', redisErr.message);
+                }
+              }
+            }
+          } catch (dbErr) {
+            console.error(`[WhatsApp] Gagal mencatat pesan ke DB:`, dbErr);
+          }
+
+          // Contoh chatbot interaktif sederhana jika user mengirim pesan "/ping"
+          if (!msg.key.fromMe && textContent.trim().toLowerCase() === '/ping') {
+            await this.sendMessage(deviceId, senderJid || phoneNum, 'pong! Koneksi aktif.');
           }
         }
       }
@@ -216,14 +617,76 @@ export class WhatsappService implements OnApplicationBootstrap {
   }
 
   /**
+   * Mengambil daftar semua grup WhatsApp yang diikuti oleh perangkat
+   */
+  async getGroups(deviceId: string) {
+    const sock = this.activeSockets.get(deviceId);
+    if (!sock || !sock.user?.id) {
+      throw new BadRequestException(`Sesi perangkat ${deviceId} belum aktif.`);
+    }
+
+    try {
+      const groupsRecord = await sock.groupFetchAllParticipating();
+      return Object.values(groupsRecord).map((g) => ({
+        id: g.id,
+        subject: g.subject,
+        owner: g.owner || g.subjectOwner || null,
+        creation: g.creation ? new Date(g.creation * 1000) : null,
+        desc: g.desc || null,
+        participantsCount: g.participants?.length || 0,
+        participants: g.participants?.map((p) => ({
+          id: p.id,
+          phoneNumber: p.id.split('@')[0],
+          admin: p.admin || null,
+        })),
+      }));
+    } catch (err: any) {
+      console.error(`[WhatsApp] Gagal mengambil daftar grup untuk device ${deviceId}:`, err);
+      throw new InternalServerErrorException(err?.message || 'Gagal mengambil daftar grup WhatsApp.');
+    }
+  }
+
+  /**
+   * Mengambil metadata detail grup WhatsApp tertentu berdasarkan ID Grup (@g.us)
+   */
+  async getGroupMetadata(deviceId: string, groupId: string) {
+    const sock = this.activeSockets.get(deviceId);
+    if (!sock || !sock.user?.id) {
+      throw new BadRequestException(`Sesi perangkat ${deviceId} belum aktif.`);
+    }
+
+    const cleanGroupId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
+    try {
+      const metadata = await sock.groupMetadata(cleanGroupId);
+      return {
+        id: metadata.id,
+        subject: metadata.subject,
+        owner: metadata.owner || metadata.subjectOwner || null,
+        creation: metadata.creation ? new Date(metadata.creation * 1000) : null,
+        desc: metadata.desc || null,
+        participantsCount: metadata.participants?.length || 0,
+        participants: metadata.participants?.map((p) => ({
+          id: p.id,
+          phoneNumber: p.id.split('@')[0],
+          admin: p.admin || null,
+        })),
+      };
+    } catch (err: any) {
+      console.error(`[WhatsApp] Gagal mengambil metadata grup ${cleanGroupId}:`, err);
+      throw new InternalServerErrorException(err?.message || 'Gagal mengambil data detail grup WhatsApp.');
+    }
+  }
+
+  /**
    * Mengirim pesan teks dan/atau media (Foto, Video, Dokumen PDF) ke nomor / LID tertentu
    */
   async sendMessage(
     deviceId: string,
     to: string,
     text: string,
-    mediaFileOrUrl?: Express.Multer.File | string,
+    mediaFileOrUrl?: any,
     originalFileName?: string,
+    quotedMessageId?: string,
   ) {
     const sock = this.activeSockets.get(deviceId);
     if (!sock) {
@@ -312,10 +775,14 @@ export class WhatsappService implements OnApplicationBootstrap {
       let fileName = originalFileName || 'document.pdf';
 
       if (typeof mediaFileOrUrl === 'string') {
-        mediaContent = { url: mediaFileOrUrl };
-        if (mediaFileOrUrl.endsWith('.pdf')) mimeType = 'application/pdf';
-        else if (mediaFileOrUrl.match(/\.(png|jpg|jpeg|webp|gif)$/i)) mimeType = 'image/jpeg';
-        else if (mediaFileOrUrl.match(/\.(mp4|mkv|avi|mov)$/i)) mimeType = 'video/mp4';
+        const cleanPath = mediaFileOrUrl.replace(/^\/(gallery\/media|documents\/download|uploads)\//, '');
+        const resolvedPath = UploadStorageHelper.resolveFileForStreaming(cleanPath, 'gallery', 'documents');
+        const finalUrl = resolvedPath || mediaFileOrUrl;
+
+        mediaContent = { url: finalUrl };
+        if (finalUrl.endsWith('.pdf')) mimeType = 'application/pdf';
+        else if (finalUrl.match(/\.(png|jpg|jpeg|webp|gif)$/i)) mimeType = 'image/jpeg';
+        else if (finalUrl.match(/\.(mp4|mkv|avi|mov)$/i)) mimeType = 'video/mp4';
       } else {
         mediaContent = mediaFileOrUrl.buffer ? mediaFileOrUrl.buffer : { url: mediaFileOrUrl.path };
         mimeType = mediaFileOrUrl.mimetype;
@@ -339,17 +806,136 @@ export class WhatsappService implements OnApplicationBootstrap {
       }
     }
 
-    const res = await sock.sendMessage(formattedJid, payload);
+    const sendOptions: any = {};
+    if (quotedMessageId) {
+      try {
+        let quotedLog = await this.logRepo.findOneBy({ messageId: quotedMessageId, deviceId });
+        if (!quotedLog) {
+          quotedLog = await this.logRepo.findOneBy({ messageId: quotedMessageId });
+        }
+
+        if (quotedLog && quotedLog.messageId) {
+          const isGroup = formattedJid.endsWith('@g.us');
+          const myPhoneNum = sock.user?.id ? sock.user.id.split(':')[0].split('@')[0] : '';
+          const myPhoneJid = myPhoneNum ? `${myPhoneNum}@s.whatsapp.net` : undefined;
+
+          const isQuotedFromMe = quotedLog.direction === 'OUT' || (
+            quotedLog.participantJid && myPhoneNum && quotedLog.participantJid.includes(myPhoneNum)
+          );
+
+          let participantJid: string | undefined = undefined;
+
+          if (isGroup) {
+            if (isQuotedFromMe) {
+              participantJid = myPhoneJid;
+            } else {
+              let cand: string | null | undefined = quotedLog.participantJid;
+              if (cand && (cand.includes('120363') || cand.endsWith('@g.us'))) {
+                cand = null;
+              }
+
+              if (!cand) {
+                const phoneMatch = (quotedLog.message || '').match(/\b(62\d{8,13}|08\d{8,12}|\d{10,15})\b/);
+                if (phoneMatch && phoneMatch[1]) {
+                  let num = phoneMatch[1];
+                  if (num.startsWith('0')) num = '62' + num.slice(1);
+                  if (!num.startsWith('120363')) cand = `${num}@s.whatsapp.net`;
+                } else {
+                  const senderNameMatch = (quotedLog.message || '').match(/^\[([^\]]+)\]:/);
+                  if (senderNameMatch && senderNameMatch[1]) {
+                    const senderName = senderNameMatch[1].trim();
+                    try {
+                      const matchedContact = await this.contactRepo.findOne({
+                        where: [
+                          { tenantId: device.tenantId as string, name: senderName },
+                          { tenantId: device.tenantId as string, pushName: senderName },
+                        ],
+                      });
+                      if (matchedContact) {
+                        cand = matchedContact.jid || (matchedContact.phoneNumber ? `${matchedContact.phoneNumber.replace(/[^0-9]/g, '')}@s.whatsapp.net` : null);
+                      }
+                    } catch (err) {
+                      // ignore
+                    }
+                  }
+                }
+              }
+
+              if (!cand) {
+                try {
+                  const groupMeta = await sock.groupMetadata(formattedJid);
+                  if (groupMeta?.participants && groupMeta.participants.length > 0) {
+                    const otherPart = groupMeta.participants.find(
+                      (p: any) => p.id && myPhoneNum && !p.id.includes(myPhoneNum)
+                    );
+                    if (otherPart) {
+                      cand = otherPart.id;
+                    } else {
+                      cand = groupMeta.participants[0].id;
+                    }
+                  }
+                } catch (err) {
+                  // ignore
+                }
+              }
+
+              if (cand) {
+                const cleanCand = cand.split(':')[0];
+                if (!cleanCand.includes('120363') && !cleanCand.endsWith('@g.us')) {
+                  participantJid = cleanCand;
+                }
+              }
+            }
+          }
+
+          let cleanQuotedText = quotedLog.message || '';
+          const groupMatch = cleanQuotedText.match(/^\[([^\]]+)\]:\s*(.*)/s) || cleanQuotedText.match(/^\[~([^\]]+)\]\s*(.*)/s);
+          if (groupMatch) {
+            cleanQuotedText = groupMatch[2];
+          }
+
+          const quotedKey: any = {
+            remoteJid: formattedJid,
+            fromMe: isQuotedFromMe,
+            id: quotedLog.messageId,
+          };
+
+          if (isGroup && participantJid) {
+            quotedKey.participant = participantJid;
+          }
+
+          sendOptions.quoted = {
+            key: quotedKey,
+            message: {
+              conversation: cleanQuotedText,
+            },
+          };
+
+          console.log(`[WhatsApp] Quoted message successfully attached for ${quotedMessageId}:`, JSON.stringify(sendOptions.quoted));
+        } else {
+          console.warn(`[WhatsApp] Quoted log tidak ditemukan di DB untuk messageId: ${quotedMessageId}`);
+        }
+      } catch (err) {
+        console.warn(`[WhatsApp] Gagal menambahkan opsi kutipan pesan ${quotedMessageId}:`, err);
+      }
+    }
+
+    const res = await sock.sendMessage(formattedJid, payload, sendOptions);
 
     // Simpan riwayat pesan keluar ke database (OUT)
     try {
+      const outMyNum = sock.user?.id ? sock.user.id.split(':')[0].split('@')[0] : '';
+      const outMyJid = outMyNum ? `${outMyNum}@s.whatsapp.net` : null;
       const logEntry = this.logRepo.create({
         deviceId,
         tenantId: device.tenantId,
         phoneNumber: formattedJid.endsWith('@s.whatsapp.net') ? formattedJid.split('@')[0] : formattedJid,
         message: mediaTypeLabel ? `[${mediaTypeLabel}] ${text || ''}` : text,
         direction: 'OUT',
-        messageId: res.key.id || null,
+        messageId: res?.key?.id || null,
+        participantJid: formattedJid.endsWith('@g.us') ? outMyJid : null,
+        quotedMessageId: quotedMessageId || null,
+        chatType: formattedJid.endsWith('@g.us') ? 'GROUP' : 'PERSONAL',
       });
       await this.logRepo.save(logEntry);
     } catch (dbErr) {
@@ -366,7 +952,7 @@ export class WhatsappService implements OnApplicationBootstrap {
     deviceId: string,
     recipients: string[],
     text: string,
-    mediaFileOrUrl?: Express.Multer.File | string,
+    mediaFileOrUrl?: any,
   ): Promise<any> {
     const sock = this.activeSockets.get(deviceId);
     if (!sock) {
@@ -458,6 +1044,8 @@ export class WhatsappService implements OnApplicationBootstrap {
     direction?: 'IN' | 'OUT',
     search?: string,
     deviceId?: string,
+    phoneNumber?: string,
+    chatTypeFilter?: 'GROUP' | 'PERSONAL',
   ) {
     const tenantId = this.tenantContext.getTenantId();
     const userRole = this.tenantContext.getRole();
@@ -468,6 +1056,16 @@ export class WhatsappService implements OnApplicationBootstrap {
     if (userRole !== 'Super Admin') {
       if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
       qb.where('log.tenantId = :tenantId', { tenantId });
+    }
+
+    // Filter opsional: Tipe percakapan (GROUP / PERSONAL)
+    if (chatTypeFilter) {
+      if (chatTypeFilter === 'GROUP') {
+        qb.andWhere("(log.chatType = 'GROUP' OR log.phoneNumber LIKE '%@g.us')");
+      } else {
+        qb.andWhere("(log.chatType = 'PERSONAL' OR log.chatType IS NULL)");
+        qb.andWhere("log.phoneNumber NOT LIKE '%@g.us'");
+      }
     }
 
     // Filter opsional: arah pesan (IN / OUT)
@@ -488,14 +1086,96 @@ export class WhatsappService implements OnApplicationBootstrap {
       qb.andWhere('log.deviceId = :deviceId', { deviceId: deviceId.trim() });
     }
 
+    // Filter opsional: phoneNumber spesifik per kontak (Pemisahan Mutlak Chat Grup vs Chat Pribadi)
+    if (phoneNumber && phoneNumber.trim()) {
+      const rawPhone = phoneNumber.trim();
+      const cleanTarget = rawPhone.replace(/^[\s+]+/, '');
+      const isTargetGroup = rawPhone.endsWith('@g.us') || rawPhone.includes('@g.us') || (cleanTarget.includes('-') && !cleanTarget.startsWith('62') && !cleanTarget.startsWith('08') && cleanTarget.length > 15);
+
+      if (isTargetGroup) {
+        // PERCAKAPAN GRUP: Hanya ambil log yang phoneNumber-nya cocok dengan ID Grup ini
+        const groupCleanId = rawPhone.split('@')[0];
+        qb.andWhere('(log.phoneNumber = :rawPhone OR log.phoneNumber LIKE :groupPattern OR log.phoneNumber = :groupCleanId)', {
+          rawPhone,
+          groupPattern: `%${groupCleanId}%`,
+          groupCleanId,
+        });
+      } else {
+        // PERCAKAPAN PRIBADI: Hanya ambil log pesan pribadi (TIDAK BOLEH mencakup log grup @g.us)
+        const digits = rawPhone.replace(/[^0-9]/g, '');
+        const lastDigits = digits.length >= 8 ? digits.slice(-8) : digits;
+
+        const relatedJids: string[] = [
+          rawPhone,
+          rawPhone.replace(/^[\s+]+/, ''),
+          `+${digits}`,
+          digits,
+          `${digits}@s.whatsapp.net`,
+        ];
+
+        if (digits.startsWith('62')) {
+          const localFormat = `0${digits.slice(2)}`;
+          relatedJids.push(localFormat, `+${localFormat}`);
+        } else if (digits.startsWith('0')) {
+          const intlFormat = `62${digits.slice(1)}`;
+          relatedJids.push(intlFormat, `+${intlFormat}`, `${intlFormat}@s.whatsapp.net`);
+        }
+
+        if (tenantId) {
+          const matchingContacts = await this.contactRepo.find({
+            where: [
+              { tenantId, phoneNumber: rawPhone },
+              { tenantId, phoneNumber: `+${digits}` },
+              { tenantId, phoneNumber: digits },
+              { tenantId, jid: rawPhone },
+              { tenantId, jid: `${digits}@s.whatsapp.net` },
+              ...(digits ? [{ tenantId, phoneNumber: ILike(`%${digits}%`) }] : []),
+            ],
+          });
+          for (const c of matchingContacts) {
+            if (c.phoneNumber && !c.phoneNumber.endsWith('@g.us') && !relatedJids.includes(c.phoneNumber)) {
+              relatedJids.push(c.phoneNumber);
+            }
+            if (c.jid && !c.jid.endsWith('@g.us') && !relatedJids.includes(c.jid)) {
+              relatedJids.push(c.jid);
+            }
+          }
+        }
+
+        const digitsPattern = digits ? `%${digits}%` : '%XYZ_NONE%';
+        const lastDigitsPattern = lastDigits ? `%${lastDigits}%` : '%XYZ_NONE%';
+
+        qb.andWhere("log.phoneNumber NOT LIKE '%@g.us'");
+        qb.andWhere(
+          '(log.phoneNumber IN (:...relatedJids) OR (length(:digits) > 5 AND log.phoneNumber LIKE :digitsPattern) OR (length(:lastDigits) > 5 AND log.phoneNumber LIKE :lastDigitsPattern))',
+          {
+            relatedJids,
+            digits: digits || 'XYZ_NONE',
+            digitsPattern,
+            lastDigits: lastDigits || 'XYZ_NONE',
+            lastDigitsPattern,
+          },
+        );
+      }
+    }
+
     const [items, total] = await qb
       .orderBy('log.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
 
+    const mappedItems = items.map((item) => {
+      if (!item.chatType) {
+        const phone = item.phoneNumber || '';
+        const isGroup = phone.endsWith('@g.us') || (phone.includes('-') && !phone.startsWith('62') && !phone.startsWith('08'));
+        item.chatType = isGroup ? 'GROUP' : 'PERSONAL';
+      }
+      return item;
+    });
+
     return {
-      items,
+      items: mappedItems,
       meta: {
         totalItems: total,
         itemCount: items.length,
@@ -507,9 +1187,81 @@ export class WhatsappService implements OnApplicationBootstrap {
   }
 
   /**
+   * Cari kontak di tenant yang cocok dengan LID murni berdasarkan JID atau Nomor HP pengirim (TIDAK BERDASARKAN PUSHNAME)
+   */
+  private async findLinkedContactForLid(tenantId: string, lid: string, pushName?: string) {
+    if (!tenantId || !lid) return null;
+
+    try {
+      const cleanLidDigits = lid.split('@')[0].replace(/[^0-9]/g, '');
+      const contact = await this.contactRepo.findOne({
+        where: [
+          { tenantId, jid: lid },
+          { tenantId, jid: ILike(`%${cleanLidDigits}%`) },
+        ],
+      });
+
+      if (contact && contact.phoneNumber && !contact.phoneNumber.endsWith('@g.us') && !contact.phoneNumber.includes('@lid') && contact.phoneNumber.length < 14) {
+        return contact;
+      }
+    } catch (err: any) {
+      console.warn('[WhatsApp] Gagal menautkan kontak LID:', err.message);
+    }
+
+    return null;
+  }
+
+  /**
+   * Otomatis sinkronisasi/upsert kontak dari pesan masuk/keluar WA MURNI BERDASARKAN NOMOR TELEPON PENGIRIM
+   */
+  private async upsertContactFromMessage(tenantId: string, jid: string, pushName?: string) {
+    if (!tenantId || !jid || jid.endsWith('@g.us') || jid.includes('-')) return;
+
+    try {
+      const cleanJid = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+      const phoneNumber = cleanJid.split('@')[0].replace(/[^0-9]/g, '');
+      if (!phoneNumber || phoneNumber.length > 15 || phoneNumber.startsWith('1415') || phoneNumber.includes('@lid')) {
+        return;
+      }
+
+      let contact = await this.contactRepo.findOneBy({ tenantId, phoneNumber });
+      if (!contact) {
+        contact = await this.contactRepo.findOneBy({ tenantId, jid: cleanJid });
+      }
+
+      if (!contact) {
+        contact = this.contactRepo.create({
+          tenantId,
+          jid: cleanJid,
+          phoneNumber,
+          name: pushName || phoneNumber,
+          pushName: pushName || null,
+        } as any) as unknown as WhatsappContact;
+      } else {
+        if (pushName && (!contact.pushName || contact.pushName === contact.phoneNumber)) {
+          contact.pushName = pushName;
+        }
+        if (pushName && (!contact.name || contact.name === contact.phoneNumber)) {
+          contact.name = pushName;
+        }
+        if (!contact.jid || contact.jid !== cleanJid) {
+          contact.jid = cleanJid;
+        }
+      }
+
+      if (contact) {
+        await this.contactRepo.save(contact);
+      }
+    } catch (err: any) {
+      console.warn('[WhatsApp] Gagal auto-upsert kontak:', err.message);
+    }
+  }
+
+  /**
    * Mematikan/logout sesi perangkat
    */
-  async logoutSession(deviceId: string): Promise<void> {
+  async logoutSession(deviceId: string, clearData = false): Promise<void> {
+    const dev = await this.deviceRepo.findOneBy({ id: deviceId });
     const sock = this.activeSockets.get(deviceId);
     if (sock) {
       try {
@@ -526,6 +1278,26 @@ export class WhatsappService implements OnApplicationBootstrap {
       status: 'disconnected',
       phoneNumber: null,
     });
+    this.qrCodes.delete(deviceId);
+
+    // Jika user memilih untuk mereset riwayat dan kontak saat ganti nomor
+    if (clearData && dev && dev.tenantId) {
+      try {
+        await this.logRepo.delete({ tenantId: dev.tenantId as string });
+        await this.contactRepo.delete({ tenantId: dev.tenantId as string });
+
+        const tenantSlug = await this.getTenantSlug(dev.tenantId as string);
+        const { absoluteFolder: galleryFolder } = UploadStorageHelper.getUploadPath(tenantSlug, 'gallery', 'whatsapp-media');
+        const { absoluteFolder: docFolder } = UploadStorageHelper.getUploadPath(tenantSlug, 'documents', 'whatsapp-media');
+        
+        if (fs.existsSync(galleryFolder)) fs.rmSync(galleryFolder, { recursive: true, force: true });
+        if (fs.existsSync(docFolder)) fs.rmSync(docFolder, { recursive: true, force: true });
+
+        console.log(`[WhatsApp] Data riwayat, kontak, dan file media untuk Device ID ${deviceId} telah direset.`);
+      } catch (dbErr) {
+        console.error(`[WhatsApp] Gagal mereset data riwayat/kontak/media:`, dbErr);
+      }
+    }
   }
 
   /**
@@ -555,5 +1327,116 @@ export class WhatsappService implements OnApplicationBootstrap {
     }
 
     return `${digits}@s.whatsapp.net`;
+  }
+
+  /**
+   * Mengambil daftar master kontak pengguna per tenant
+   */
+  async getContacts(page = 1, limit = 20, search?: string) {
+    const tenantId = this.tenantContext.getTenantId();
+    const userRole = this.tenantContext.getRole();
+
+    const qb = this.contactRepo.createQueryBuilder('contact');
+
+    if (userRole !== 'Super Admin') {
+      if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
+      qb.where('contact.tenantId = :tenantId', { tenantId });
+    }
+
+    if (search && search.trim()) {
+      qb.andWhere(
+        '(contact.name ILIKE :search OR contact.phoneNumber ILIKE :search OR contact.pushName ILIKE :search)',
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    const [items, total] = await qb
+      .orderBy('contact.name', 'ASC', 'NULLS LAST')
+      .addOrderBy('contact.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        totalItems: total,
+        itemCount: items.length,
+        itemsPerPage: +limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: +page,
+      },
+    };
+  }
+
+  /**
+   * Tambah atau update kontak secara manual
+   */
+  async saveContact(data: { phoneNumber: string; name?: string; pushName?: string }) {
+    const tenantId = this.tenantContext.getTenantId();
+    if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
+
+    const jid = this.formatToWhatsappJid(data.phoneNumber);
+    if (!jid) throw new BadRequestException('Nomor telepon tidak valid.');
+
+    const phoneNumber = jid.split('@')[0];
+
+    let contact = await this.contactRepo.findOneBy({ tenantId, jid });
+    if (!contact) {
+      contact = this.contactRepo.create({
+        tenantId,
+        jid,
+        phoneNumber,
+        name: data.name || null,
+        pushName: data.pushName || null,
+      } as any) as unknown as WhatsappContact;
+    } else {
+      if (data.name !== undefined) contact.name = data.name;
+      if (data.pushName !== undefined) contact.pushName = data.pushName;
+    }
+
+    return await this.contactRepo.save(contact!);
+  }
+
+  /**
+   * Hapus kontak dari master data
+   */
+  async deleteContact(id: string) {
+    const tenantId = this.tenantContext.getTenantId();
+    const userRole = this.tenantContext.getRole();
+
+    const contact = await this.contactRepo.findOneBy({ id });
+    if (!contact) throw new BadRequestException('Kontak tidak ditemukan.');
+
+    if (userRole !== 'Super Admin' && contact.tenantId !== tenantId) {
+      throw new BadRequestException('Akses ditolak.');
+    }
+
+    await this.contactRepo.remove(contact);
+    return { success: true, message: 'Kontak berhasil dihapus.' };
+  }
+  /**
+   * Reset perhitungan pesan belum dibaca untuk tenant saat ini
+   */
+  async resetUnreadCount() {
+    const tenantId = this.tenantContext.getTenantId();
+    if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
+    
+    const unreadKey = `wa:unread:tenant:${tenantId}`;
+    await this.redis.set(unreadKey, 0);
+    this.wsGateway.emitUnreadUpdate(tenantId, 0);
+    
+    return { success: true, message: 'Notifikasi berhasil direset.' };
+  }
+  /**
+   * Mengambil jumlah pesan belum dibaca untuk tenant saat ini
+   */
+  async getUnreadCount() {
+    const tenantId = this.tenantContext.getTenantId();
+    if (!tenantId) throw new BadRequestException('Context tenant tidak ditemukan.');
+    
+    const unreadKey = `wa:unread:tenant:${tenantId}`;
+    const val = await this.redis.get(unreadKey);
+    return { count: val ? parseInt(val, 10) : 0 };
   }
 }

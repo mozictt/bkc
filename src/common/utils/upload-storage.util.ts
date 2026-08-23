@@ -8,6 +8,7 @@ export interface StoragePathResult {
 
 export class UploadStorageHelper {
   private static readonly baseUploadsRoot = path.join(process.cwd(), 'storage/uploads');
+  private static tenantSlugCache = new Map<string, string>();
 
   /**
    * Sanitasi segmen path agar aman dari karakter ilegal file system dan path traversal.
@@ -22,6 +23,38 @@ export class UploadStorageHelper {
         .replace(/\s+/g, '-')              // Ubah spasi menjadi strip (-)
         .toLowerCase() || 'default'
     );
+  }
+
+  /**
+   * Resolusi slug tenant terpusat (dari Context, DB via tenantRepo, atau Memory Cache).
+   */
+  static async resolveSlug(
+    tenantRepo?: any,
+    tenantId?: string | null,
+    tenantContext?: any,
+  ): Promise<string> {
+    const contextSlug = tenantContext?.getSlug?.();
+    if (contextSlug) return contextSlug;
+
+    if (!tenantId) return 'default';
+
+    if (this.tenantSlugCache.has(tenantId)) {
+      return this.tenantSlugCache.get(tenantId)!;
+    }
+
+    if (tenantRepo && typeof tenantRepo.findOne === 'function') {
+      try {
+        const tenant = await tenantRepo.findOne({ where: { id: tenantId } });
+        if (tenant && tenant.slug) {
+          this.tenantSlugCache.set(tenantId, tenant.slug);
+          return tenant.slug;
+        }
+      } catch (err) {
+        console.warn(`[UploadStorageHelper] Gagal mengambil slug untuk tenantId ${tenantId}:`, err);
+      }
+    }
+
+    return 'default';
   }
 
   /**
@@ -94,16 +127,37 @@ export class UploadStorageHelper {
     if (!rawPath) return null;
 
     // Safely join array if rawPath is passed as an array from NestJS wildcard route
-    const pathString = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath);
+    let pathString = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath);
+
+    // Clean leading slashes and any leading 'storage/uploads/' or 'uploads/' segments
+    pathString = pathString
+      .replace(/^[\/\\]+/, '')
+      .replace(/^(storage[\/\\]+)?uploads[\/\\]+/, '');
 
     // Normalisasi & pencegahan Path Traversal Attack
     const normalized = path.normalize(pathString).replace(/^(\.\.[\/\\])+/, '');
-    let filePath = path.join(this.baseUploadsRoot, normalized);
+    const candidatePaths: string[] = [
+      path.join(this.baseUploadsRoot, normalized),
+    ];
 
-    // 1. Cek di path utama (/storage/uploads/{normalized})
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      if (filePath.startsWith(this.baseUploadsRoot)) {
-        return filePath;
+    // Variasi fallback path: hapus atau tambah 'gallery/' jika ada perbedaan struktur modul
+    if (normalized.includes('/gallery/')) {
+      candidatePaths.push(path.join(this.baseUploadsRoot, normalized.replace('/gallery/', '/')));
+    } else {
+      const parts = normalized.split('/');
+      if (parts.length > 1) {
+        // Coba tambahkan 'gallery' setelah slug tenant (cth: tenant/whatsapp-media -> tenant/gallery/whatsapp-media)
+        const withGallery = [parts[0], 'gallery', ...parts.slice(1)].join('/');
+        candidatePaths.push(path.join(this.baseUploadsRoot, withGallery));
+      }
+    }
+
+    // 1. Cek candidate paths di /storage/uploads/
+    for (const filePath of candidatePaths) {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        if (filePath.startsWith(this.baseUploadsRoot)) {
+          return filePath;
+        }
       }
     }
 
