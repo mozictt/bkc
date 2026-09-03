@@ -5,6 +5,7 @@ import { Menu } from '../entities/menu.entity';
 import { Role } from '../role/entities/role.entity';
 import { Permission } from '../entities/permission.entity';
 import { runMenuSeed } from './seeds/menu-role.seeder';
+import { runMasterTenantSeed } from './seeds/master-tenant.seeder';
 import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
@@ -39,8 +40,14 @@ async function run() {
 
     console.log('🌱 Starting seeding process...');
 
-    // 3. Jalankan fungsi seeder
+    // 3. Jalankan fungsi seeder secara berurutan
+    // Step 1: Master Tenant (Atomik & Transaksional) → harus dijalankan pertama kali
+    await runMasterTenantSeed(AppDataSource);
+
+    // Step 2: Menu & Role Seeder (legacy, akan di-migrate ke master seeder)
     await runMenuSeed(AppDataSource);
+
+    // Step 3: Data Wilayah
     await runWilayahSeed(AppDataSource);
 
     console.log('🏁 Seeding finished successfully!');
