@@ -36,8 +36,11 @@ export async function runWilayahSeed(dataSource: DataSource) {
   await queryRunner.connect();
 
   try {
-    console.log('🧹 Menghapus data wilayah lama (cascade)...');
-    await queryRunner.query('TRUNCATE TABLE provinsi CASCADE;');
+    console.log('🧹 Menghapus data wilayah lama...');
+    await queryRunner.query('DELETE FROM kelurahan;');
+    await queryRunner.query('DELETE FROM kecamatan;');
+    await queryRunner.query('DELETE FROM kabupaten;');
+    await queryRunner.query('DELETE FROM provinsi;');
 
     // 1. DOWNLOAD DATA MAPPING KODE POS
     console.log('📥 Mengunduh data mapping Kode Pos...');
