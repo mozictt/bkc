@@ -213,6 +213,9 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
   await queryRunner.connect();
   await queryRunner.startTransaction();
 
+  // Deklarasi di scope fungsi agar bisa diakses di Step 5 (di luar transaksi)
+  let tenantId: string = '';
+
   try {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🌱 Master Tenant Seeder – Starting...');
@@ -227,8 +230,6 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
     const MASTER_NAME = process.env.MASTER_TENANT_NAME ?? 'Master Admin';
     const MASTER_EMAIL = process.env.MASTER_TENANT_EMAIL ?? 'admin@example.com';
     const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-
-    let tenantId: string;
 
     // Cari tenant master berdasarkan is_master=true (bukan slug, agar tidak konflik data lama)
     const existingTenant = await queryRunner.query(
@@ -344,46 +345,9 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
     console.log('\n📦 [Step 4/5] Seeding Menu Tree...');
     await upsertMenuTree(queryRunner, MENU_TREE, tenantId);
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // STEP 5: User Super Admin
-    // ──────────────────────────────────────────────────────────────────────────
-    console.log('\n📦 [Step 5/5] Seeding User Super Admin...');
-
-    const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME ?? 'superadmin';
-    const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@123!';
-    const SALT_ROUNDS = 12;
-
-    const existingUser = await queryRunner.query(
-      `SELECT id FROM users WHERE username = $1 AND tenant_id = $2 LIMIT 1`,
-      [SUPER_ADMIN_USERNAME, tenantId],
-    );
-
-    if (existingUser.length === 0) {
-      const hashedPassword = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
-
-      await queryRunner.query(
-        // Nama kolom mengikuti TypeORM entity (camelCase jika tanpa @Column name):
-        //   is_active     → @Column({ name: 'is_active' }) → snake_case
-        //   refreshToken  → @Column tanpa name → camelCase
-        //   pegawai_id    → @Column({ name: 'pegawai_id' }) → snake_case
-        //   tenantId      → @Column({ name: 'tenant_id' }) → snake_case (TenantBaseEntity)
-        `INSERT INTO users
-           (username, password, role_id, is_active, "refreshToken", pegawai_id, tenant_id, created_at, updated_at)
-         VALUES ($1, $2, $3, true, NULL, NULL, $4, NOW(), NOW())`,
-        [SUPER_ADMIN_USERNAME, hashedPassword, superAdminRoleId, tenantId],
-      );
-      console.log(`  ✅ User Super Admin created: "${SUPER_ADMIN_USERNAME}"`);
-      console.log(`  ⚠️  Password default digunakan – SEGERA ubah via aplikasi!`);
-    } else {
-      console.log(`  ℹ️  User "${SUPER_ADMIN_USERNAME}" exists, skipping.`);
-    }
-
-    // ─── Commit Transaction ───────────────────────────────────────────────────
+    // ─── Commit Transaction (Tenant, Role, Permission, Menu) ─────────────────
     await queryRunner.commitTransaction();
-
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🏁 Master Tenant Seeder – Completed!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log('\n✅ Transaksi utama (Tenant/Role/Permission/Menu) berhasil di-commit.');
   } catch (error) {
     await queryRunner.rollbackTransaction();
     console.error('\n❌ Master Tenant Seeder FAILED – Transaction rolled back!');
@@ -392,4 +356,59 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
   } finally {
     await queryRunner.release();
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // STEP 5: User Super Admin (di LUAR transaksi utama agar tidak ikut rollback)
+  // Menggunakan koneksi terpisah agar idempotent dan aman
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('\n📦 [Step 5/5] Seeding User Super Admin...');
+
+  const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME ?? 'superadmin';
+  const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@123!';
+  const SALT_ROUNDS = 12;
+
+  try {
+    // ⚠️ Constraint DB: UNIQUE(username) tanpa tenant_id → query cukup by username
+    const existingUserResult = await dataSource.query(
+      `SELECT id, tenant_id FROM users WHERE username = $1 LIMIT 1`,
+      [SUPER_ADMIN_USERNAME],
+    );
+
+    if (existingUserResult.length === 0) {
+      // Ambil role Super Admin yang sudah pasti ada (dari transaksi sebelumnya)
+      const roleResult = await dataSource.query(
+        `SELECT id FROM roles WHERE name = $1 AND tenant_id = $2 LIMIT 1`,
+        ['Super Admin', tenantId],
+      );
+
+      if (roleResult.length === 0) {
+        throw new Error(`Role "Super Admin" tidak ditemukan untuk tenant_id=${tenantId}`);
+      }
+
+      const roleId = roleResult[0].id;
+      const hashedPassword = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
+
+      await dataSource.query(
+        `INSERT INTO users
+           (username, password, role_id, is_active, "refreshToken", pegawai_id, tenant_id, created_at, updated_at)
+         VALUES ($1, $2, $3, true, NULL, NULL, $4, NOW(), NOW())`,
+        [SUPER_ADMIN_USERNAME, hashedPassword, roleId, tenantId],
+      );
+      console.log(`  ✅ User Super Admin created: "${SUPER_ADMIN_USERNAME}"`);
+      console.log(`  ⚠️  Password default digunakan – SEGERA ubah via aplikasi!`);
+    } else {
+      console.log(
+        `  ℹ️  User "${SUPER_ADMIN_USERNAME}" sudah ada (id=${existingUserResult[0].id}, tenant=${existingUserResult[0].tenant_id}), skipping.`,
+      );
+    }
+  } catch (userError) {
+    // Error saat buat user tidak membatalkan data tenant/role/menu yang sudah ter-commit
+    console.error('  ❌ Gagal membuat User Super Admin:');
+    console.error(userError);
+    throw userError;
+  }
+
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🏁 Master Tenant Seeder – Completed!');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
