@@ -176,6 +176,8 @@ async function upsertMenuTree(
 
     if (existing.length === 0) {
       // Insert baru
+      // menus: is_active, is_visible, order_no, required_resource → sesuai entity @Column
+      // tenantId, createdAt, updatedAt → camelCase (tidak ada @Column name)
       const inserted = await queryRunner.query(
         `INSERT INTO menus
            (name, url, icon, order_no, is_active, is_visible, required_resource, parent_id, tenant_id, created_at, updated_at)
@@ -228,17 +230,21 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
 
     let tenantId: string;
 
+    // Cari tenant master berdasarkan is_master=true (bukan slug, agar tidak konflik data lama)
     const existingTenant = await queryRunner.query(
-      `SELECT id FROM tenants WHERE slug = $1 LIMIT 1`,
-      [MASTER_SLUG],
+      `SELECT id, slug, name FROM tenants WHERE is_master = true LIMIT 1`,
     );
 
     if (existingTenant.length === 0) {
       tenantId = randomUUID();
 
       await queryRunner.query(
+        // Nama kolom sesuai DB aktual:
+        //   isActive → TypeORM tanpa @Column name → camelCase
+        //   is_master, parent_id → ada @Column({ name: '...' }) → snake_case
+        //   createdAt, updatedAt, expiredAt → TypeORM tanpa @Column name → camelCase
         `INSERT INTO tenants
-           (id, name, slug, is_active, email, is_master, parent_id, settings, "expiredAt", "createdAt", "updatedAt")
+           (id, name, slug, "isActive", email, is_master, parent_id, settings, "expiredAt", "createdAt", "updatedAt")
          VALUES ($1, $2, $3, true, $4, true, NULL,
            $5::jsonb,
            NULL, NOW(), NOW())`,
@@ -250,7 +256,7 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
           JSON.stringify({
             frontendUrl: FRONTEND_URL,
             allowedModules: ['*'],
-            maxUsers: null, // unlimited
+            maxUsers: null,
             timezone: process.env.APP_TIMEZONE ?? 'Asia/Jakarta',
           }),
         ],
@@ -258,7 +264,9 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
       console.log(`  ✅ Tenant master created: "${MASTER_NAME}" (id=${tenantId})`);
     } else {
       tenantId = existingTenant[0].id;
-      console.log(`  ℹ️  Tenant master exists (id=${tenantId}), skipping creation.`);
+      console.log(
+        `  ℹ️  Tenant master exists: "${existingTenant[0].name}" slug="${existingTenant[0].slug}" (id=${tenantId}), skipping creation.`,
+      );
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -275,6 +283,7 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
 
     if (existingRole.length === 0) {
       const insertedRole = await queryRunner.query(
+        // roles: TenantBaseEntity menggunakan @Column({ name: 'tenant_id' }) → snake_case
         `INSERT INTO roles (name, description, tenant_id, created_at, updated_at)
          VALUES ($1, $2, $3, NOW(), NOW())
          RETURNING id`,
@@ -353,10 +362,11 @@ export async function runMasterTenantSeed(dataSource: DataSource): Promise<void>
       const hashedPassword = await bcrypt.hash(SUPER_ADMIN_PASSWORD, SALT_ROUNDS);
 
       await queryRunner.query(
-        // Nama kolom mengikuti TypeORM entity:
-        //   - is_active  → @Column({ name: 'is_active' })
-        //   - "refreshToken" → @Column tanpa name decorator (TypeORM pakai camelCase)
-        //   - pegawai_id → @Column({ name: 'pegawai_id' })
+        // Nama kolom mengikuti TypeORM entity (camelCase jika tanpa @Column name):
+        //   is_active     → @Column({ name: 'is_active' }) → snake_case
+        //   refreshToken  → @Column tanpa name → camelCase
+        //   pegawai_id    → @Column({ name: 'pegawai_id' }) → snake_case
+        //   tenantId      → @Column({ name: 'tenant_id' }) → snake_case (TenantBaseEntity)
         `INSERT INTO users
            (username, password, role_id, is_active, "refreshToken", pegawai_id, tenant_id, created_at, updated_at)
          VALUES ($1, $2, $3, true, NULL, NULL, $4, NOW(), NOW())`,
