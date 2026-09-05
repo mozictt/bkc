@@ -58,13 +58,13 @@ export class GalleryController {
             type: 'string',
             format: 'binary',
           },
-          description: 'Pilih foto atau video untuk diunggah (Max 20 file)',
+          description: 'Pilih foto atau video untuk diunggah (Max 100 file)',
         },
       },
     },
   })
   @UseInterceptors(
-    FilesInterceptor('files', 20, {
+    FilesInterceptor('files', 100, {
       storage: diskStorage({
         destination: (req, file, cb) => {
           const tempPath = path.join(process.cwd(), 'storage/uploads/gallery/.tmp');
