@@ -86,25 +86,27 @@ export class GalleryController {
       limits: {
         fileSize: 500 * 1024 * 1024, // 500MB max per file
       },
-      fileFilter: (req, file, cb) => {
-        // Validasi ganda: Ekstensi dan MIME Type untuk mencegah Spoofing
-        const validExt = !!file.originalname.match(/\.(jpg|jpeg|png|webp|mp4|webm)$/i);
-        const validMime = !!file.mimetype.match(/^(image\/(jpeg|png|webp)|video\/(mp4|webm))$/i);
+      fileFilter: (req: any, file, cb) => {
+        // Validasi ganda: Ekstensi & MIME Type fleksibel (dukung JPG, JPEG, PNG, WEBP, GIF, JFIF, HEIC, MP4, WEBM, MOV, MKV, octet-stream)
+        const validExt = !!file.originalname.match(/\.(jpg|jpeg|png|webp|gif|jfif|heic|heif|avif|mp4|webm|mov|mkv|avi)$/i);
+        const validMime = !!file.mimetype.match(/^(image\/(jpeg|jpg|png|webp|gif|jfif|heic|heif|avif|pjpeg|x-png)|video\/(mp4|webm|quicktime|x-matroska|avi)|application\/octet-stream)$/i);
         
-        if (!validExt || !validMime) {
-          return cb(
-            new UnprocessableEntityException('Validation failed (invalid file type or mime type spoofing detected)') as any, 
-            false
-          );
+        if (!validExt && !validMime) {
+          req.fileValidationError = `Format file ${file.originalname} (${file.mimetype}) tidak didukung`;
+          return cb(null, false);
         }
         cb(null, true);
       },
     }),
   )
   async uploadMultiple(
+    @Req() req: Request,
     @Body() createGalleryDto: CreateGalleryDto,
     @UploadedFiles() files: MulterFile[],
   ) {
+    if ((req as any).fileValidationError) {
+      throw new UnprocessableEntityException((req as any).fileValidationError);
+    }
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
   }
 

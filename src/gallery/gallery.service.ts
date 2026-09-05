@@ -72,7 +72,7 @@ export class GalleryService {
         // Resolusi path sumber (temp file)
         const sourcePath = file.path
           ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
-          : path.join(process.cwd(), 'storage/uploads/.tmp', file.filename);
+          : path.join(process.cwd(), 'storage/uploads/gallery/.tmp', file.filename);
 
         if (!fs.existsSync(sourcePath)) {
           throw new InternalServerErrorException(`File upload sementara tidak ditemukan di ${sourcePath}`);
