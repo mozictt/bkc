@@ -33,4 +33,14 @@ export class CloneTenantConfigDto {
   @IsOptional()
   @IsBoolean()
   includePermissions?: boolean = true;
+
+  @ApiProperty({ description: 'Otomatis buat akun User Super Admin baru untuk Tenant Tujuan', default: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  createSuperAdminUser?: boolean = true;
+
+  @ApiProperty({ description: 'Password opsional untuk user Super Admin baru (jika kosong akan dibuat otomatis)', example: 'Password123!', required: false })
+  @IsOptional()
+  @IsString()
+  customPassword?: string;
 }

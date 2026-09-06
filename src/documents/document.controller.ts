@@ -63,7 +63,7 @@ export class DocumentController {
 
   @Post('upload')
   @RequirePermission('Document', 'create')
-  @ApiOperation({ summary: 'Unggah berkas dokumen baru (PDF, Word, Excel, ZIP, TAR, dll)' })
+  @ApiOperation({ summary: 'Unggah berkas dokumen baru (PDF, Word, Excel, ZIP, TAR, dll) maksimal 500MB per berkas' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: CreateDocumentDto })
   @UseInterceptors(
@@ -83,7 +83,7 @@ export class DocumentController {
         },
       }),
       limits: {
-        fileSize: 50 * 1024 * 1024, // Batasi berkas maksimal 50MB
+        fileSize: 500 * 1024 * 1024, // Batasi berkas maksimal 500MB
       },
       fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();

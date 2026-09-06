@@ -7,6 +7,8 @@ import { Tenant } from '../entities/tenant.entity';
 import { Role } from '../role/entities/role.entity';
 import { Menu } from '../entities/menu.entity';
 import { Permission } from '../entities/permission.entity';
+import { User } from '../entities/user.entity';
+import * as bcrypt from 'bcrypt';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { CloneTenantConfigDto } from './dto/clone-tenant-config.dto';
 
@@ -247,6 +249,82 @@ export class TenantsService {
         }
       }
 
+      // 4. Pembuatan Akun Super Admin Otomatis berbasis nama/slug tenant
+      let createdUserSummary: any = null;
+
+      if (dto.createSuperAdminUser !== false) {
+        const userRepo = queryRunner.manager.getRepository(User);
+        const roleRepo = queryRunner.manager.getRepository(Role);
+
+        // Cari atau buat Role Super Admin untuk target tenant
+        let targetSuperAdminRole = await roleRepo.findOne({
+          where: { tenantId: targetTenantId, name: 'Super Admin' },
+        });
+
+        if (!targetSuperAdminRole) {
+          targetSuperAdminRole = roleRepo.create({
+            name: 'Super Admin',
+            description: 'Akses Penuh Seluruh Sistem',
+            tenantId: targetTenantId,
+          });
+          targetSuperAdminRole = await roleRepo.save(targetSuperAdminRole);
+          clonedRolesCount++;
+        }
+
+        // Generasi Username Sistem berbasis nama/slug tenant
+        const sanitizeUsername = (str: string) => {
+          return str
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        };
+
+        const slugOrName = targetTenant.slug || targetTenant.name;
+        const baseUsername = `admin_${sanitizeUsername(slugOrName)}`;
+        let generatedUsername = baseUsername;
+        let counter = 1;
+
+        // Pastikan Username Unik di seluruh sistem
+        while (await userRepo.findOne({ where: { username: generatedUsername } })) {
+          generatedUsername = `${baseUsername}_${counter}`;
+          counter++;
+        }
+
+        // Generasi Password (menggunakan customPassword atau bawaan otomatis)
+        const plainPassword = dto.customPassword || `Password123!`;
+        const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+        // Cek apakah user untuk tenant ini dengan role Super Admin sudah ada
+        let existingUser = await userRepo.findOne({
+          where: { tenantId: targetTenantId, username: generatedUsername },
+        });
+
+        if (!existingUser) {
+          existingUser = userRepo.create({
+            username: generatedUsername,
+            password: hashedPassword,
+            role: targetSuperAdminRole,
+            tenantId: targetTenantId,
+            is_active: true,
+          });
+          await userRepo.save(existingUser);
+          createdUserSummary = {
+            username: generatedUsername,
+            password: plainPassword,
+            roleName: targetSuperAdminRole.name,
+            tenantName: targetTenant.name,
+          };
+        } else {
+          createdUserSummary = {
+            username: existingUser.username,
+            password: '(Sudah Ada)',
+            roleName: targetSuperAdminRole.name,
+            tenantName: targetTenant.name,
+          };
+        }
+      }
+
       await queryRunner.commitTransaction();
 
       try {
@@ -266,6 +344,7 @@ export class TenantsService {
           clonedMenusCount,
           clonedPermissionsCount,
           targetTenantName: targetTenant.name,
+          createdUser: createdUserSummary,
         },
       };
     } catch (err) {
