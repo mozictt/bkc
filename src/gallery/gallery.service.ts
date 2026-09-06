@@ -8,6 +8,7 @@ import { Album } from './entities/album.entity';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import sharp from 'sharp';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { MulterFile } from '@common/types/multer-file.type';
 import { UploadStorageHelper } from '@common/utils/upload-storage.util';
@@ -65,35 +66,51 @@ export class GalleryService {
     const movedFiles: string[] = [];
 
     try {
-      const galleryEntities = files.map((file) => {
-        const mediaType = file.mimetype.includes('video') ? 'video' : 'photo';
-        const targetFilePath = path.join(absoluteFolder, file.filename);
+      const galleryEntities = await Promise.all(
+        files.map(async (file) => {
+          const mediaType = file.mimetype.includes('video') ? 'video' : 'photo';
+          const targetFilePath = path.join(absoluteFolder, file.filename);
 
-        // Resolusi path sumber (temp file)
-        const sourcePath = file.path
-          ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
-          : path.join(process.cwd(), 'storage/uploads/gallery/.tmp', file.filename);
+          // Resolusi path sumber (temp file)
+          const sourcePath = file.path
+            ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
+            : path.join(process.cwd(), 'storage/uploads/gallery/.tmp', file.filename);
 
-        if (!fs.existsSync(sourcePath)) {
-          throw new InternalServerErrorException(`File upload sementara tidak ditemukan di ${sourcePath}`);
-        }
+          if (!fs.existsSync(sourcePath)) {
+            throw new InternalServerErrorException(`File upload sementara tidak ditemukan di ${sourcePath}`);
+          }
 
-        // Pindahkan file dari temp storage ke folder tujuan via Helper
-        UploadStorageHelper.moveFile(sourcePath, targetFilePath);
-        movedFiles.push(targetFilePath);
+          // Pindahkan file dari temp storage ke folder tujuan via Helper
+          UploadStorageHelper.moveFile(sourcePath, targetFilePath);
+          movedFiles.push(targetFilePath);
 
-        const storedFileName = path.join(relativeFolder, file.filename).replace(/\\/g, '/');
+          // Generate thumbnail jika tipe media foto
+          if (mediaType === 'photo') {
+            try {
+              const thumbPath = UploadStorageHelper.getThumbnailPath(targetFilePath);
+              UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
+              await sharp(targetFilePath)
+                .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
+                .webp({ quality: 75 })
+                .toFile(thumbPath);
+            } catch (err) {
+              console.warn(`[GalleryService] Gagal generate thumbnail untuk ${targetFilePath}:`, err);
+            }
+          }
 
-        return this.galleryRepo.create({
-          albumId: albumEntity ? albumEntity.id : (dto.albumId || undefined),
-          fileName: storedFileName,
-          originalName: file.originalname,
-          mimeType: file.mimetype,
-          size: file.size,
-          path: `/gallery/media/${storedFileName}`, 
-          type: mediaType,
-        });
-      });
+          const storedFileName = path.join(relativeFolder, file.filename).replace(/\\/g, '/');
+
+          return this.galleryRepo.create({
+            albumId: albumEntity ? albumEntity.id : (dto.albumId || undefined),
+            fileName: storedFileName,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            path: `/gallery/media/${storedFileName}`, 
+            type: mediaType,
+          });
+        })
+      );
 
       const savedMedia = await this.galleryRepo.save(galleryEntities);
 
@@ -192,6 +209,44 @@ export class GalleryService {
 
       fs.createReadStream(filePath).pipe(res);
     }
+  }
+
+  async streamThumbnail(rawPath: string, req: Request, res: Response) {
+    const filePath = UploadStorageHelper.resolveFileForStreaming(rawPath, 'gallery');
+
+    if (!filePath) {
+      throw new NotFoundException('File media tidak ditemukan');
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const isPhoto = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.jfif', '.heic', '.heif', '.avif'].includes(ext);
+
+    if (!isPhoto) {
+      return this.streamMedia(rawPath, req, res);
+    }
+
+    const thumbPath = UploadStorageHelper.getThumbnailPath(filePath);
+
+    if (!fs.existsSync(thumbPath)) {
+      try {
+        UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
+        await sharp(filePath)
+          .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
+          .webp({ quality: 75 })
+          .toFile(thumbPath);
+      } catch (err) {
+        console.warn(`[GalleryService] Gagal generate thumbnail on-the-fly untuk ${filePath}:`, err);
+        return this.streamMedia(rawPath, req, res);
+      }
+    }
+
+    const stat = fs.statSync(thumbPath);
+    res.writeHead(200, {
+      'Content-Type': 'image/webp',
+      'Content-Length': stat.size,
+      'Cache-Control': 'private, max-age=86400',
+    });
+    fs.createReadStream(thumbPath).pipe(res);
   }
 
   async findAll(queryDto?: QueryGalleryDto) {

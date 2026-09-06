@@ -187,13 +187,28 @@ export class UploadStorageHelper {
   }
 
   /**
-   * Hapus file fisik di storage secara aman dengan proteksi Path Traversal & Fallback.
+   * Menghasilkan path absolute untuk thumbnail dari absolute path file asli.
+   */
+  static getThumbnailPath(originalAbsPath: string): string {
+    const relPath = path.relative(this.baseUploadsRoot, originalAbsPath);
+    const parsed = path.parse(relPath);
+    const thumbRelPath = path.join(parsed.dir, `${parsed.name}.webp`);
+    return path.join(this.baseUploadsRoot, '.thumbnails', thumbRelPath);
+  }
+
+  /**
+   * Hapus file fisik di storage secara aman (master + thumbnail jika ada) dengan proteksi Path Traversal & Fallback.
    */
   static removeFile(rawPath: string, ...legacySubfolders: string[]): boolean {
     const filePath = this.resolveFileForStreaming(rawPath, ...legacySubfolders);
     if (filePath && fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
+        // Hapus thumbnail jika ada
+        const thumbPath = this.getThumbnailPath(filePath);
+        if (fs.existsSync(thumbPath)) {
+          fs.unlinkSync(thumbPath);
+        }
         return true;
       } catch (err) {
         console.error(`[UploadStorageHelper] Gagal menghapus file: ${filePath}`, err);

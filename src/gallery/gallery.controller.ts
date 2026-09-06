@@ -110,6 +110,27 @@ export class GalleryController {
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
   }
 
+  @Get('thumbnail/*path')
+  @RequirePermission('Gallery', 'view')
+  @ApiOperation({ summary: 'Stream / ambil thumbnail WebP ringan galeri (secure authentication)' })
+  @ApiQuery({
+    name: 'token',
+    required: false,
+    description: 'JWT Bearer token dalam query string untuk pemutar/pratinjau gambar native',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mengembalikan file thumbnail WebP terkompresi (~30KB).',
+  })
+  async getThumbnail(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('token') token?: string,
+  ) {
+    const rawPath = (req.params as any).path || req.params[0] || req.params['0'] || '';
+    return this.galleryService.streamThumbnail(rawPath, req, res);
+  }
+
   @Get('media/*path')
   @RequirePermission('Gallery', 'view')
   @ApiOperation({ summary: 'Stream / ambil file media galeri berdasarkan relative path (slug/judul/filename)' })
