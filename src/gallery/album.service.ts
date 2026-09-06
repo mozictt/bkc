@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Album } from './entities/album.entity';
+import { Gallery } from './entities/gallery.entity';
 import { CreateAlbumDto } from './dto/create-album.dto';
 import { QueryAlbumDto } from './dto/query-album.dto';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
@@ -66,6 +67,32 @@ export class AlbumService extends BaseTenantService<Album> {
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
+
+    // Query 3 preview media untuk setiap album tanpa N+1 query
+    const albumIds = data.map((album) => album.id);
+    if (albumIds.length > 0) {
+      const previewGalleries = await this.albumRepo.manager
+        .getRepository(Gallery)
+        .createQueryBuilder('gallery')
+        .where('gallery.albumId IN (:...albumIds)', { albumIds })
+        .orderBy('gallery.createdAt', 'DESC')
+        .getMany();
+
+      const galleriesMap = new Map<string, Gallery[]>();
+      for (const media of previewGalleries) {
+        if (!galleriesMap.has(media.albumId)) {
+          galleriesMap.set(media.albumId, []);
+        }
+        const current = galleriesMap.get(media.albumId)!;
+        if (current.length < 3) {
+          current.push(media);
+        }
+      }
+
+      data.forEach((album) => {
+        (album as any).galleries = galleriesMap.get(album.id) || [];
+      });
+    }
 
     return {
       success: true,
