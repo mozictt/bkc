@@ -2,7 +2,8 @@ import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@ne
 import { TenantsService } from './tenants.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { CloneTenantConfigDto } from './dto/clone-tenant-config.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { UpdateTenantDto } from './dto/update-tenant.dto';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { MasterTenantGuard } from '../common/guards/master-tenant.guard';
 
@@ -39,6 +40,18 @@ export class TenantsController {
   @ApiOperation({ summary: 'Mendapatkan detail tenant berdasarkan ID' })
   async findOne(@Param('id') id: string) {
     return this.tenantsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(MasterTenantGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Memperbarui detail, status, atau masa kedaluwarsa (expiredAt) tenant (Khusus Master Tenant)' })
+  @ApiBody({ type: UpdateTenantDto })
+  async updateTenant(
+    @Param('id') id: string,
+    @Body() dto: UpdateTenantDto,
+  ) {
+    return this.tenantsService.updateTenant(id, dto);
   }
 
   @Patch(':id/settings')

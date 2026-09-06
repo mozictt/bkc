@@ -11,6 +11,7 @@ import { User } from '../entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { CloneTenantConfigDto } from './dto/clone-tenant-config.dto';
+import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Injectable()
 export class TenantsService {
@@ -88,6 +89,28 @@ export class TenantsService {
   async toggleMaster(id: string) {
     const tenant = await this.findOne(id);
     tenant.isMaster = !tenant.isMaster;
+    return await this.tenantRepo.save(tenant);
+  }
+
+  async updateTenant(id: string, dto: UpdateTenantDto) {
+    const tenant = await this.findOne(id);
+
+    if (dto.name !== undefined) {
+      // Cek keunikan nama jika berubah
+      if (dto.name !== tenant.name) {
+        const existing = await this.tenantRepo.findOne({ where: { name: dto.name } });
+        if (existing) throw new ConflictException('Tenant dengan nama tersebut sudah ada.');
+      }
+      tenant.name = dto.name;
+    }
+
+    if (dto.email !== undefined) tenant.email = dto.email;
+    if (dto.expiredAt !== undefined) tenant.expiredAt = dto.expiredAt ? new Date(dto.expiredAt) : null;
+    if (dto.isActive !== undefined) tenant.isActive = dto.isActive;
+    if (dto.settings !== undefined) {
+      tenant.settings = { ...(tenant.settings || {}), ...dto.settings };
+    }
+
     return await this.tenantRepo.save(tenant);
   }
 
@@ -271,7 +294,7 @@ export class TenantsService {
           clonedRolesCount++;
         }
 
-        // Generasi Username Sistem berbasis nama/slug tenant
+        // Generasi Username Sistem murni berbasis Nama Tenant / Klinik (targetTenant.name)
         const sanitizeUsername = (str: string) => {
           return str
             .toLowerCase()
@@ -280,8 +303,8 @@ export class TenantsService {
             .replace(/^_+|_+$/g, '');
         };
 
-        const slugOrName = targetTenant.slug || targetTenant.name;
-        const baseUsername = `admin_${sanitizeUsername(slugOrName)}`;
+        const tenantName = targetTenant.name || targetTenant.slug;
+        const baseUsername = `admin_${sanitizeUsername(tenantName)}`;
         let generatedUsername = baseUsername;
         let counter = 1;
 
