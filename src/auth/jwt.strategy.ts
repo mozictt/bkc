@@ -32,6 +32,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role_id: payload.role_id,
       role: payload.role,
       slug: payload.slug,
+      isImpersonated: payload.isImpersonated || false,
+      impersonator: payload.impersonator || null,
     };
   }
 }

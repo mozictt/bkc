@@ -27,7 +27,8 @@ export class TenantSubscriber implements EntitySubscriberInterface {
 
   // Dipanggil tepat sebelum data di-UPDATE
   beforeUpdate(event: UpdateEvent<any>) {
-    this.injectTenantId(event);
+    // ⚠️ HINDARI meng-inject tenantId saat update!
+    // Meng-inject tenantId pada update akan menimpa tenantId entitas di DB dengan tenantId context user yang sedang login.
   }
 
   private injectTenantId(event: InsertEvent<any> | UpdateEvent<any>) {

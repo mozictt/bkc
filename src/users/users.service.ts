@@ -74,10 +74,10 @@ export class UsersService {
     tenantId: string,
     pegawaiId: number,
   ) {
-    // 🔍 1. Target Tenant ID: Prioritaskan Active Switched Tenant Context dari TenantContextService
-    let targetTenantId = this.tenantContext.getTenantId();
+    // 🔍 1. Target Tenant ID Resolution: Prioritaskan tenantId yang dikirimkan (UUID/slug)
+    let targetTenantId: string | null = null;
 
-    if (!targetTenantId && tenantId) {
+    if (tenantId) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
       if (isUuid) {
         targetTenantId = tenantId;
@@ -90,7 +90,7 @@ export class UsersService {
     }
 
     if (!targetTenantId) {
-      targetTenantId = tenantId;
+      targetTenantId = this.tenantContext.getTenantId();
     }
 
     // 🔍 2. Resolusi Role ID jika role ID berasal dari Master Tenant atau Tenant lain
@@ -257,7 +257,8 @@ export class UsersService {
    * Memperbarui data pengguna (Username, Role, Password, Status).
    */
   async updateUser(id: number, dto: UpdateUserDto) {
-    const tenantId = this.tenantContext.getTenantId();
+    const isMaster = this.tenantContext.getIsMaster();
+    const tenantId = isMaster ? undefined : this.tenantContext.getTenantId();
 
     const user = await this.userRepo.findOne({
       where: {
@@ -311,7 +312,8 @@ export class UsersService {
    * Mengubah status keaktifan pengguna (Aktif / Non-Aktif).
    */
   async toggleUserStatus(id: number, isActive: boolean) {
-    const tenantId = this.tenantContext.getTenantId();
+    const isMaster = this.tenantContext.getIsMaster();
+    const tenantId = isMaster ? undefined : this.tenantContext.getTenantId();
 
     const user = await this.userRepo.findOne({
       where: {
@@ -341,7 +343,8 @@ export class UsersService {
    * Menghapus (Soft Delete) pengguna.
    */
   async removeUser(id: number) {
-    const tenantId = this.tenantContext.getTenantId();
+    const isMaster = this.tenantContext.getIsMaster();
+    const tenantId = isMaster ? undefined : this.tenantContext.getTenantId();
 
     const user = await this.userRepo.findOne({
       where: {
@@ -367,7 +370,8 @@ export class UsersService {
    * Mereset password pengguna menjadi default (password123 atau sesuai input).
    */
   async resetUserPassword(id: number, newPassword = 'password123') {
-    const tenantId = this.tenantContext.getTenantId();
+    const isMaster = this.tenantContext.getIsMaster();
+    const tenantId = isMaster ? undefined : this.tenantContext.getTenantId();
 
     const user = await this.userRepo.findOne({
       where: {

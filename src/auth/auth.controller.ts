@@ -3,8 +3,10 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SwitchUserDto } from './dto/switch-user.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '@auth/public.decorator';
+import { MasterTenantGuard } from '../common/guards/master-tenant.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -51,6 +53,24 @@ export class AuthController {
   async register(@Body() registerDto: RegisterDto) {
     // console.log(registerDto );
     return this.authService.register(registerDto);
+  }
+
+  @UseGuards(JwtAuthGuard, MasterTenantGuard)
+  @Post('switch-user')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Switch login ke user tenant anak (Khusus Master Tenant Super Admin)' })
+  @ApiResponse({ status: 200, description: 'Berhasil switch login ke user target' })
+  async switchUser(@Req() req: any, @Body() dto: SwitchUserDto) {
+    return this.authService.switchUser(req.user, dto.targetUserId, req);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('switch-back')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Kembali dari mode Switch User ke akun Master Tenant utama' })
+  @ApiResponse({ status: 200, description: 'Berhasil kembali ke akun Master Tenant' })
+  async switchBack(@Req() req: any) {
+    return this.authService.switchBack(req.user, req);
   }
 
   @UseGuards(JwtAuthGuard)
