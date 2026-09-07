@@ -8,7 +8,11 @@ import { Album } from './entities/album.entity';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import sharp from 'sharp';
+
+const execFileAsync = promisify(execFile);
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { MulterFile } from '@common/types/multer-file.type';
 import { UploadStorageHelper } from '@common/utils/upload-storage.util';
@@ -84,18 +88,21 @@ export class GalleryService {
           UploadStorageHelper.moveFile(sourcePath, targetFilePath);
           movedFiles.push(targetFilePath);
 
-          // Generate thumbnail jika tipe media foto
-          if (mediaType === 'photo') {
-            try {
-              const thumbPath = UploadStorageHelper.getThumbnailPath(targetFilePath);
-              UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
+          // Generate thumbnail untuk foto (.webp via sharp) atau video (.webp via ffmpeg)
+          try {
+            const thumbPath = UploadStorageHelper.getThumbnailPath(targetFilePath);
+            UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
+
+            if (mediaType === 'photo') {
               await sharp(targetFilePath)
                 .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
                 .webp({ quality: 75 })
                 .toFile(thumbPath);
-            } catch (err) {
-              console.warn(`[GalleryService] Gagal generate thumbnail untuk ${targetFilePath}:`, err);
+            } else if (mediaType === 'video') {
+              await this.generateVideoThumbnail(targetFilePath, thumbPath);
             }
+          } catch (err) {
+            console.warn(`[GalleryService] Gagal generate thumbnail untuk ${targetFilePath}:`, err);
           }
 
           const storedFileName = path.join(relativeFolder, file.filename).replace(/\\/g, '/');
@@ -211,6 +218,42 @@ export class GalleryService {
     }
   }
 
+  /**
+   * Helper private untuk mengekstrak 1 frame dari file video (pada 00:00:01)
+   * menggunakan ffmpeg dan menyimpannya sebagai file gambar .webp (~15KB) di storage.
+   */
+  private async generateVideoThumbnail(videoAbsPath: string, thumbAbsPath: string): Promise<boolean> {
+    try {
+      UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbAbsPath));
+      let ffmpegExec = 'ffmpeg';
+      try {
+        const staticPath = require('ffmpeg-static');
+        if (staticPath) {
+          ffmpegExec = staticPath;
+        }
+      } catch (e) {
+        // Fallback ke system 'ffmpeg'
+      }
+
+      await execFileAsync(ffmpegExec, [
+        '-ss', '00:00:01',
+        '-i', videoAbsPath,
+        '-vframes', '1',
+        '-vf', 'scale=400:-1',
+        '-y',
+        thumbAbsPath,
+      ], { timeout: 15000 });
+      return fs.existsSync(thumbAbsPath);
+    } catch (err) {
+      console.warn(`[GalleryService] Gagal ekstrak thumbnail video via ffmpeg (${videoAbsPath}):`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Melayani file thumbnail statis (.webp ~15KB) untuk FOTO maupun VIDEO.
+   * JANGAN PERNAH men-stream file MP4 di endpoint thumbnail agar RAM Server tidak habis.
+   */
   async streamThumbnail(rawPath: string, req: Request, res: Response) {
     const filePath = UploadStorageHelper.resolveFileForStreaming(rawPath, 'gallery');
 
@@ -220,33 +263,39 @@ export class GalleryService {
 
     const ext = path.extname(filePath).toLowerCase();
     const isPhoto = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.jfif', '.heic', '.heif', '.avif'].includes(ext);
-
-    if (!isPhoto) {
-      return this.streamMedia(rawPath, req, res);
-    }
-
     const thumbPath = UploadStorageHelper.getThumbnailPath(filePath);
 
+    // 1. Jika file thumbnail .webp belum ada di disk, buat secara on-the-fly
     if (!fs.existsSync(thumbPath)) {
       try {
         UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
-        await sharp(filePath)
-          .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
-          .webp({ quality: 75 })
-          .toFile(thumbPath);
+        if (isPhoto) {
+          await sharp(filePath)
+            .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
+            .webp({ quality: 75 })
+            .toFile(thumbPath);
+        } else {
+          await this.generateVideoThumbnail(filePath, thumbPath);
+        }
       } catch (err) {
         console.warn(`[GalleryService] Gagal generate thumbnail on-the-fly untuk ${filePath}:`, err);
-        return this.streamMedia(rawPath, req, res);
       }
     }
 
-    const stat = fs.statSync(thumbPath);
-    res.writeHead(200, {
-      'Content-Type': 'image/webp',
-      'Content-Length': stat.size,
-      'Cache-Control': 'private, max-age=86400',
-    });
-    fs.createReadStream(thumbPath).pipe(res);
+    // 2. Jika file thumbnail .webp berhasil dibuat / sudah ada -> Sajikan static file WebP (~15KB)
+    if (fs.existsSync(thumbPath)) {
+      const stat = fs.statSync(thumbPath);
+      res.writeHead(200, {
+        'Content-Type': 'image/webp',
+        'Content-Length': stat.size,
+        'Cache-Control': 'public, max-age=86400',
+      });
+      return fs.createReadStream(thumbPath).pipe(res);
+    }
+
+    // 3. Fallback jika thumbnail belum ada di server:
+    // Kembalikan 404 agar frontend otomatis beralih ke video frame preview (#t=0.5) browser
+    throw new NotFoundException('Thumbnail belum tersedia');
   }
 
   async findAll(queryDto?: QueryGalleryDto) {

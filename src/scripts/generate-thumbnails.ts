@@ -31,8 +31,12 @@ async function processDirectory(dirPath: string): Promise<{ success: number; ski
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
       const validImageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.jfif', '.heic', '.heif', '.avif'];
+      const validVideoExts = ['.mp4', '.webm', '.mov', '.mkv', '.avi'];
 
-      if (!validImageExts.includes(ext)) {
+      const isPhoto = validImageExts.includes(ext);
+      const isVideo = validVideoExts.includes(ext);
+
+      if (!isPhoto && !isVideo) {
         continue;
       }
 
@@ -51,16 +55,42 @@ async function processDirectory(dirPath: string): Promise<{ success: number; ski
         if (!fs.existsSync(thumbDir)) {
           fs.mkdirSync(thumbDir, { recursive: true });
         }
-        await sharp(fullPath)
-          .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
-          .webp({ quality: 75 })
-          .toFile(thumbPath);
 
-        success++;
-        console.log(`[OK] Thumbnail dibuat: ${relPath} -> .thumbnails/${thumbRelPath}`);
+        if (isPhoto) {
+          await sharp(fullPath)
+            .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
+            .webp({ quality: 75 })
+            .toFile(thumbPath);
+        } else if (isVideo) {
+          const { execFile } = require('child_process');
+          const { promisify } = require('util');
+          const execFileAsync = promisify(execFile);
+          let ffmpegExec = 'ffmpeg';
+          try {
+            const staticPath = require('ffmpeg-static');
+            if (staticPath) ffmpegExec = staticPath;
+          } catch (e) {}
+
+          await execFileAsync(ffmpegExec, [
+            '-ss', '00:00:01',
+            '-i', fullPath,
+            '-vframes', '1',
+            '-vf', 'scale=400:-1',
+            '-y',
+            thumbPath,
+          ], { timeout: 15000 });
+        }
+
+        if (fs.existsSync(thumbPath)) {
+          success++;
+          console.log(`[OK] Thumbnail dibuat: ${relPath} -> .thumbnails/${thumbRelPath}`);
+        } else {
+          failed++;
+          console.warn(`[WARN] File thumbnail tidak terbentuk untuk ${entry.name}`);
+        }
       } catch (err: any) {
         failed++;
-        console.error(`[ERROR] Gagal memuat thumbnail untuk ${entry.name}:`, err.message);
+        console.error(`[ERROR] Gagal membuat thumbnail untuk ${entry.name}:`, err.message);
       }
     }
   }
