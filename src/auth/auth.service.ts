@@ -116,33 +116,47 @@ export class AuthService {
   }
 
   async refresh(userId: number, token: string) {
-    const user = await this.userService.findById(userId);
+    // 🔥 1. Verifikasi dan dekode JWT refresh token
+    let decodedToken: any;
+    try {
+      decodedToken = this.jwtService.verify(token);
+    } catch (err) {
+      throw new UnauthorizedException('Refresh token sudah expired atau tidak valid');
+    }
+
+    const targetUserId = Number(userId || decodedToken?.sub);
+    const user = await this.userService.findById(targetUserId);
 
     if (!user) {
       throw new UnauthorizedException('User tidak ditemukan');
     }
 
-    // 🔥 cek expired / valid JWT
-    try {
-      this.jwtService.verify(token);
-    } catch (err) {
-      throw new UnauthorizedException('Refresh token sudah expired');
+    // 🔥 2. Cek kecocokan token dengan DB jika bukan mode impersonasi
+    if (!decodedToken?.isImpersonated && user.refreshToken) {
+      const isExactMatch = user.refreshToken === token;
+      const isTruncatedMatch = token.startsWith(user.refreshToken);
+      if (!isExactMatch && !isTruncatedMatch) {
+        throw new UnauthorizedException('Refresh token tidak valid atau telah digantikan');
+      }
     }
 
-    // 🔥 cek token cocok dengan DB (rotation)
-    if (user.refreshToken !== token) {
-      throw new UnauthorizedException('Refresh token tidak valid');
-    }
-
-    const payload = {
+    // 🔥 3. Susun payload baru lengkap dengan role_id dan tenant slug yang aman (optional chaining)
+    const payload: any = {
       sub: user.id,
       username: user.username,
-      tenantId: user.tenantId, // 👈 Pastikan ada saat refresh
+      tenantId: user.tenantId,
+      role_id: user.role?.id,
       role: user.role?.name,
-      slug: user.tenant.slug,
+      slug: user.tenant?.slug,
       tenantExpiredAt: user.tenant?.expiredAt,
       name_pegawai: user.pegawai?.name || null,
     };
+
+    // Mempertahankan mode impersonated jika token sebelumnya dari switch-user
+    if (decodedToken?.isImpersonated && decodedToken?.impersonator) {
+      payload.isImpersonated = true;
+      payload.impersonator = decodedToken.impersonator;
+    }
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
@@ -153,7 +167,9 @@ export class AuthService {
         this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
     });
 
-    await this.userService.updateRefreshToken(user.id, refreshToken);
+    if (!decodedToken?.isImpersonated) {
+      await this.userService.updateRefreshToken(user.id, refreshToken);
+    }
 
     return { accessToken, refreshToken };
   }

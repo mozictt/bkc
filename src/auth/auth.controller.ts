@@ -1,9 +1,10 @@
 import { Controller, Post, Body, UnauthorizedException, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SwitchUserDto } from './dto/switch-user.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '@auth/public.decorator';
 import { MasterTenantGuard } from '../common/guards/master-tenant.guard';
@@ -42,9 +43,20 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @ApiOperation({ summary: 'Refresh JWT Token' })
-  @ApiResponse({ status: 200, description: 'Token baru berhasil diterbitkan' })
-  async refresh(@Body() body: { userId: number; refreshToken: string }) {
-    return this.authService.refresh(body.userId, body.refreshToken);
+  @ApiBody({ type: RefreshTokenDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Token baru berhasil diterbitkan',
+    schema: {
+      example: {
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Refresh token tidak valid atau kadaluarsa' })
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refresh(refreshTokenDto.userId, refreshTokenDto.refreshToken);
   }
 
   @Post('register')
