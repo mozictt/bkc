@@ -22,6 +22,7 @@ function findMp4Files(dir, fileList = []) {
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
+      if (file === '.tmp' || file === '.thumbnails') continue;
       findMp4Files(filePath, fileList);
     } else if (file.toLowerCase().endsWith('.mp4') && !file.includes('.faststart.')) {
       fileList.push(filePath);
@@ -33,10 +34,10 @@ function findMp4Files(dir, fileList = []) {
 
 async function runMigration() {
   const ffmpegExec = getFfmpegPath();
-  const galleryStorageDir = path.join(process.cwd(), 'storage/uploads/gallery');
+  const baseUploadsDir = path.join(process.cwd(), 'storage/uploads');
 
-  console.log(`🔍 Mengumpulkan seluruh file video MP4 lama dari: ${galleryStorageDir}...`);
-  const mp4Files = findMp4Files(galleryStorageDir);
+  console.log(`🔍 Mengumpulkan seluruh file video MP4 lama dari: ${baseUploadsDir}...`);
+  const mp4Files = findMp4Files(baseUploadsDir);
 
   if (mp4Files.length === 0) {
     console.log('✅ Tidak ada file video lama yang perlu diproses.');
