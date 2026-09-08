@@ -124,15 +124,21 @@ const MENU_TREE: MenuSeedItem[] = [
       },
       {
         name: 'Pegawai Management',
-        url: '/pegawai',
+        url: '',
         order_no: 4,
-        requiredResource: 'menu-pegawai-list',
+        requiredResource: 'menu-pegawai-management',
         children: [
           {
             name: 'Profil Pegawai',
-            url: '/pegawai/profil',
+            url: '/profile  ',
             order_no: 1,
             requiredResource: 'menu-profil-pegawai',
+          },
+          {
+            name: 'Data Pegawai',
+            url: '/pegawai',
+            order_no: 1,
+            requiredResource: 'menu-pegawai-list',
           },
         ],
       },

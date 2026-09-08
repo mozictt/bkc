@@ -190,8 +190,6 @@ export class MenuService {
       const tree = this.buildMenuTree(flatMenusWithPermissions);
 
       return tree;
-
-      return tree;
     } catch (error) {
       console.error('[MenuService Error]', error);
       if (error instanceof NotFoundException) throw error;
