@@ -217,6 +217,8 @@ export class GalleryService {
 
       fs.createReadStream(filePath).pipe(res);
     }
+  }
+
   /**
    * Helper private untuk memindahkan MOOV atom (metadata MP4) ke awal file (+faststart)
    * agar video dapat langsung di-stream dan terputar tanpa delay di server cloud.
