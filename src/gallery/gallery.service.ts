@@ -99,6 +99,7 @@ export class GalleryService {
                 .webp({ quality: 75 })
                 .toFile(thumbPath);
             } else if (mediaType === 'video') {
+              await this.optimizeVideoFastStart(targetFilePath);
               await this.generateVideoThumbnail(targetFilePath, thumbPath);
             }
           } catch (err) {
@@ -167,7 +168,7 @@ export class GalleryService {
     else if (ext === '.mp4') contentType = 'video/mp4';
     else if (ext === '.webm') contentType = 'video/webm';
 
-    const MAX_CHUNK_SIZE = 3 * 1024 * 1024; // 3MB per chunk untuk responsivitas streaming & seeking
+    const MAX_CHUNK_SIZE = 8 * 1024 * 1024; // 8MB per chunk untuk responsivitas streaming & seeking di cloud
 
     // Respons 206 Partial Content jika ada header Range dan tipe file adalah video
     if (range && contentType.startsWith('video/')) {
@@ -215,6 +216,42 @@ export class GalleryService {
       });
 
       fs.createReadStream(filePath).pipe(res);
+    }
+  /**
+   * Helper private untuk memindahkan MOOV atom (metadata MP4) ke awal file (+faststart)
+   * agar video dapat langsung di-stream dan terputar tanpa delay di server cloud.
+   */
+  private async optimizeVideoFastStart(inputAbsPath: string): Promise<void> {
+    const tempPath = `${inputAbsPath}.faststart.mp4`;
+    try {
+      let ffmpegExec = 'ffmpeg';
+      try {
+        const staticPath = require('ffmpeg-static');
+        if (staticPath) {
+          ffmpegExec = staticPath;
+        }
+      } catch (e) {}
+
+      await execFileAsync(
+        ffmpegExec,
+        [
+          '-i', inputAbsPath,
+          '-c', 'copy',
+          '-movflags', '+faststart',
+          '-y',
+          tempPath,
+        ],
+        { timeout: 30000 },
+      );
+
+      if (fs.existsSync(tempPath)) {
+        fs.renameSync(tempPath, inputAbsPath);
+      }
+    } catch (err) {
+      console.warn(`[GalleryService] Gagal menerapkan faststart pada ${inputAbsPath}:`, err);
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
     }
   }
 

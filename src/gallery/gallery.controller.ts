@@ -111,7 +111,6 @@ export class GalleryController {
   }
 
   @Get('thumbnail/*path')
-  @RequirePermission('Gallery', 'view')
   @ApiOperation({ summary: 'Stream / ambil thumbnail WebP ringan galeri (secure authentication)' })
   @ApiQuery({
     name: 'token',
@@ -132,7 +131,6 @@ export class GalleryController {
   }
 
   @Get('media/*path')
-  @RequirePermission('Gallery', 'view')
   @ApiOperation({ summary: 'Stream / ambil file media galeri berdasarkan relative path (slug/judul/filename)' })
   @ApiHeader({
     name: 'range',
