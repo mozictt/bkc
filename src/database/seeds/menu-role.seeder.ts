@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import { Menu } from '../../entities/menu.entity';
 import { Role } from '../../role/entities/role.entity';
 import { Permission } from '../../entities/permission.entity';
@@ -37,13 +37,16 @@ async function upsertMenuTree(
   const masterTenantId = masterTenant ? masterTenant.id : null;
 
   for (const item of items) {
-    // 1. Pencarian Fleksibel (dengan filter tenantId Master Tenant)
+    // 1. Pencarian Fleksibel (HANYA untuk Master Tenant atau Global, TIDAK PERNAH menyentuh tenant lain)
     let menu: Menu | null = null;
     if (item.requiredResource) {
       menu = await menuRepo.findOne({
         where: masterTenantId
-          ? [{ requiredResource: item.requiredResource, tenantId: masterTenantId }, { requiredResource: item.requiredResource }]
-          : { requiredResource: item.requiredResource },
+          ? [
+              { requiredResource: item.requiredResource, tenantId: masterTenantId },
+              { requiredResource: item.requiredResource, tenantId: IsNull() },
+            ]
+          : { requiredResource: item.requiredResource, tenantId: IsNull() },
         relations: ['parent'],
       });
     }
@@ -51,8 +54,11 @@ async function upsertMenuTree(
     if (!menu && item.url) {
       menu = await menuRepo.findOne({
         where: masterTenantId
-          ? [{ url: item.url, tenantId: masterTenantId }, { url: item.url }]
-          : { url: item.url },
+          ? [
+              { url: item.url, tenantId: masterTenantId },
+              { url: item.url, tenantId: IsNull() },
+            ]
+          : { url: item.url, tenantId: IsNull() },
         relations: ['parent'],
       });
     }
@@ -60,8 +66,11 @@ async function upsertMenuTree(
     if (!menu) {
       menu = await menuRepo.findOne({
         where: masterTenantId
-          ? [{ name: item.name, tenantId: masterTenantId }, { name: item.name }]
-          : { name: item.name },
+          ? [
+              { name: item.name, tenantId: masterTenantId },
+              { name: item.name, tenantId: IsNull() },
+            ]
+          : { name: item.name, tenantId: IsNull() },
         relations: ['parent'],
       });
     }
@@ -163,18 +172,8 @@ export const runMenuSeed = async (dataSource: DataSource) => {
     console.log('ℹ️ Master Tenant belum dibuat. Menu disemai dengan tenantId = null.');
   }
 
-  // --- 0.2 HAPUS DATA MENU LAMA (RESET & RECREATE FRESH) ---
-  console.log('🗑️ Menghapus seluruh data menu lama di database...');
-  try {
-    if (masterTenant) {
-      await dataSource.query(`DELETE FROM menus WHERE tenant_id = $1 OR tenant_id IS NULL`, [masterTenant.id]);
-    } else {
-      await dataSource.query(`DELETE FROM menus`);
-    }
-    console.log('✅ Data menu lama berhasil dihapus secara bersih.');
-  } catch (deleteError: any) {
-    console.warn('⚠️ Catatan penghapusan menu lama:', deleteError.message);
-  }
+  // --- 0.2 NON-DESTRUCTIVE UPSERT (MENU TENANT LAIN 100% AMAN & TIDAK DIHAPUS) ---
+  console.log('🛡️ Memproses seeder menu secara non-destruktif (menu tenant lain 100% aman & tidak akan tersentuh)...');
 
   // --- 1. SEED MENUS (Recursive Tree dengan Children & Fresh Recreation) ---
   console.log('🌱 Creating fresh Menu Tree (Parent & Children)...');

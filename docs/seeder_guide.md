@@ -102,7 +102,10 @@ docker exec -it backend_app npx ts-node src/database/seed-menu.ts
 
 ## 🧹 Fitur Otomatisasi Seeder
 
-Saat seeder dijalankan, sistem akan otomatis melakukan langkah-langkah berikut:
-1. **Auto Reset**: Menghapus data menu lama secara bersih agar tidak ada sisa menu yang usang.
-2. **Master Tenant Binding**: Mengikat `tenant_id` dari Master Tenant (`is_master = true`) ke seluruh menu dan permission.
+Saat seeder dijalankan (`npm run seed:menu` atau `npx ts-node src/database/seed-menu.ts`), sistem otomatis melakukan langkah-langkah berikut:
+1. **Non-Destructive In-Place Upsert (Proteksi Multi-Tenant Total)**:
+   - **TIDAK MENJALANKAN `DELETE FROM menus`**, sehingga mencegah *cascading deletion* pada menu tenant lain.
+   - Pencarian menu lama secara ketat dibatasi hanya pada Master Tenant (`tenant_id = masterTenant.id`) atau menu Global (`tenant_id IS NULL`).
+   - **Menu milik tenant lain (`tenant_id` selain Master Tenant) TIDAK AKAN PERNAH tersentuh, diubah, maupun dihapus**.
+2. **Master Tenant Binding**: Mengikat `tenant_id` dari Master Tenant (`is_master = true`) ke seluruh menu dan permission yang baru disemai atau diperbarui.
 3. **Invalidasi Cache Redis**: Menghapuskan key Redis `menus:*` secara otomatis sehingga frontend Vue/Nuxt langsung menampilkan struktur menu terbaru tanpa jeda cache.
