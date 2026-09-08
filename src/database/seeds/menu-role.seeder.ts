@@ -2,8 +2,137 @@ import { DataSource } from 'typeorm';
 import { Menu } from '../../entities/menu.entity';
 import { Role } from '../../role/entities/role.entity';
 import { Permission } from '../../entities/permission.entity';
+import { Tenant } from '../../entities/tenant.entity';
 import { AccessLevel } from '../../permissions/constants/access-level.constant';
+import { MENU_TREE, SUPER_ADMIN_RESOURCES, MenuSeedItem } from './menu-tree.config';
+import Redis from 'ioredis';
 
+// ─── Helper Invalidate Cache Redis Menu ─────────────────────────────────────────
+async function clearRedisMenuCache() {
+  try {
+    const host = process.env.REDIS_HOST || 'localhost';
+    const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+    const redis = new Redis({ host, port });
+    const keys = await redis.keys('menus:*');
+    if (keys && keys.length > 0) {
+      await redis.del(...keys);
+      console.log(`🧹 Cache Redis menu berhasil dibersihkan (${keys.length} keys).`);
+    } else {
+      console.log('🧹 Cache Redis menu sudah bersih.');
+    }
+    await redis.quit();
+  } catch (err: any) {
+    console.warn(`⚠️ Gagal membersihkan cache Redis menu: ${err.message}`);
+  }
+}
+
+// ─── Helper Rekursif Upsert Menu Tree ──────────────────────────────────────────
+async function upsertMenuTree(
+  menuRepo: any,
+  items: MenuSeedItem[],
+  parent: Menu | null = null,
+  masterTenant: Tenant | null = null,
+  requiredResourcesSet: Set<string> = new Set(),
+): Promise<void> {
+  const masterTenantId = masterTenant ? masterTenant.id : null;
+
+  for (const item of items) {
+    // 1. Pencarian Fleksibel (dengan filter tenantId Master Tenant)
+    let menu: Menu | null = null;
+    if (item.requiredResource) {
+      menu = await menuRepo.findOne({
+        where: masterTenantId
+          ? [{ requiredResource: item.requiredResource, tenantId: masterTenantId }, { requiredResource: item.requiredResource }]
+          : { requiredResource: item.requiredResource },
+        relations: ['parent'],
+      });
+    }
+
+    if (!menu && item.url) {
+      menu = await menuRepo.findOne({
+        where: masterTenantId
+          ? [{ url: item.url, tenantId: masterTenantId }, { url: item.url }]
+          : { url: item.url },
+        relations: ['parent'],
+      });
+    }
+
+    if (!menu) {
+      menu = await menuRepo.findOne({
+        where: masterTenantId
+          ? [{ name: item.name, tenantId: masterTenantId }, { name: item.name }]
+          : { name: item.name },
+        relations: ['parent'],
+      });
+    }
+
+    if (!menu) {
+      menu = menuRepo.create({
+        name: item.name,
+        url: item.url || '',
+        icon: item.icon || '',
+        order_no: item.order_no,
+        requiredResource: (item.requiredResource || null) as any,
+        parent: (parent || null) as any,
+        tenantId: masterTenantId,
+        tenant: (masterTenant || null) as any,
+        is_active: true,
+        is_visible: true,
+      });
+      menu = await menuRepo.save(menu);
+      console.log(`  ✅ Menu baru dibuat (tenant: ${masterTenantId || 'global'}): "${item.name}"`);
+    } else {
+      let updated = false;
+      if (menu.name !== item.name) {
+        console.log(`  ✏️ Mengubah nama menu: "${menu.name}" => "${item.name}"`);
+        menu.name = item.name;
+        updated = true;
+      }
+      if (item.url !== undefined && menu.url !== (item.url || '')) {
+        menu.url = item.url || '';
+        updated = true;
+      }
+      if (item.icon !== undefined && menu.icon !== (item.icon || '')) {
+        menu.icon = item.icon || '';
+        updated = true;
+      }
+      if (item.order_no !== undefined && menu.order_no !== item.order_no) {
+        menu.order_no = item.order_no;
+        updated = true;
+      }
+      if (item.requiredResource !== undefined && menu.requiredResource !== (item.requiredResource || null)) {
+        menu.requiredResource = (item.requiredResource || null) as any;
+        updated = true;
+      }
+      if (parent ? (!menu.parent || menu.parent.id !== parent.id) : (menu.parent !== null && menu.parent !== undefined)) {
+        menu.parent = (parent || null) as any;
+        updated = true;
+      }
+      if (masterTenantId && menu.tenantId !== masterTenantId) {
+        menu.tenantId = masterTenantId;
+        menu.tenant = (masterTenant || null) as any;
+        updated = true;
+      }
+
+      if (updated) {
+        await menuRepo.save(menu);
+        console.log(`  🔄 Menu diperbarui (tenant: ${masterTenantId || 'global'}): "${item.name}"`);
+      } else {
+        console.log(`  ℹ️ Menu sesuai & aktif: "${item.name}", melewati.`);
+      }
+    }
+
+    if (item.requiredResource) {
+      requiredResourcesSet.add(item.requiredResource);
+    }
+
+    if (item.children && item.children.length > 0) {
+      await upsertMenuTree(menuRepo, item.children, menu, masterTenant, requiredResourcesSet);
+    }
+  }
+}
+
+// ─── Main Seeder Function ──────────────────────────────────────────────────────
 export const runMenuSeed = async (dataSource: DataSource) => {
   // --- 0. FIX SCHEMA MISMATCH (UUID -> INT) ---
   try {
@@ -24,217 +153,128 @@ export const runMenuSeed = async (dataSource: DataSource) => {
   const menuRepo = dataSource.getRepository(Menu);
   const roleRepo = dataSource.getRepository(Role);
   const permissionRepo = dataSource.getRepository(Permission);
+  const tenantRepo = dataSource.getRepository(Tenant);
 
-  // --- 1. SEED MENUS (Parent & Children) ---
-  let dashboard = await menuRepo.findOneBy({ name: 'Dashboard' });
-  if (!dashboard) {
-    dashboard = await menuRepo.save(
-      menuRepo.create({
-        name: 'Dashboard',
-        url: '/dashboard',
-        icon: 'home',
-        order_no: 1,
-      }),
-    );
+  // --- 0.1 AMBIL MASTER TENANT ---
+  const masterTenant = await tenantRepo.findOne({ where: { isMaster: true } });
+  if (masterTenant) {
+    console.log(`🔑 Master Tenant terdeteksi: "${masterTenant.name}" (id=${masterTenant.id})`);
+  } else {
+    console.log('ℹ️ Master Tenant belum dibuat. Menu disemai dengan tenantId = null.');
   }
 
-  let dokumen = await menuRepo.findOneBy({ name: 'Dokumen' });
-  if (!dokumen) {
-    dokumen = await menuRepo.save(
-      menuRepo.create({
-        name: 'Dokumen',
-        url: '/dokumen',
-        icon: 'folder',
-        requiredResource: 'Document',
-        order_no: 2,
-      }),
-    );
+  // --- 0.2 HAPUS DATA MENU LAMA (RESET & RECREATE FRESH) ---
+  console.log('🗑️ Menghapus seluruh data menu lama di database...');
+  try {
+    if (masterTenant) {
+      await dataSource.query(`DELETE FROM menus WHERE tenant_id = $1 OR tenant_id IS NULL`, [masterTenant.id]);
+    } else {
+      await dataSource.query(`DELETE FROM menus`);
+    }
+    console.log('✅ Data menu lama berhasil dihapus secara bersih.');
+  } catch (deleteError: any) {
+    console.warn('⚠️ Catatan penghapusan menu lama:', deleteError.message);
   }
 
-  let systemMgmt = await menuRepo.findOneBy({ name: 'System Management' });
-  if (!systemMgmt) {
-    systemMgmt = await menuRepo.save(
-      menuRepo.create({
-        name: 'System Management',
-        icon: 'settings',
-        order_no: 3,
-      }),
-    );
-  }
+  // --- 1. SEED MENUS (Recursive Tree dengan Children & Fresh Recreation) ---
+  console.log('🌱 Creating fresh Menu Tree (Parent & Children)...');
+  const requiredResourcesSet = new Set<string>();
+  await upsertMenuTree(menuRepo, MENU_TREE, null, masterTenant, requiredResourcesSet);
 
-  let userMenu = await menuRepo.findOneBy({ name: 'User Management' });
-  if (!userMenu) {
-    userMenu = await menuRepo.save(
-      menuRepo.create({
-        name: 'User Management',
-        url: '/users',
-        parent: systemMgmt, // Child dari System Management
-        requiredResource: 'User',
-        order_no: 1,
-      }),
-    );
-  }
-
-  let roleMenu = await menuRepo.findOneBy({ name: 'Role Management' });
-  if (!roleMenu) {
-    roleMenu = await menuRepo.save(
-      menuRepo.create({
-        name: 'Role Management',
-        url: '/roles',
-        parent: systemMgmt,
-        requiredResource: 'Role',
-        order_no: 2,
-      }),
-    );
-  }
-
-  let menuMgmt = await menuRepo.findOneBy({ name: 'Menu Management' });
-  if (!menuMgmt) {
-    menuMgmt = await menuRepo.save(
-      menuRepo.create({
-        name: 'Menu Management',
-        url: '/menu',
-        parent: systemMgmt,
-        requiredResource: 'Menu',
-        order_no: 3,
-      }),
-    );
-  }
-
-  let pegawaiMenu = await menuRepo.findOneBy({ name: 'Pegawai Management' });
-  if (!pegawaiMenu) {
-    pegawaiMenu = await menuRepo.save(
-      menuRepo.create({
-        name: 'Pegawai Management',
-        url: '/pegawai',
-        parent: systemMgmt,
-        requiredResource: 'Pegawai',
-        order_no: 4,
-      }),
-    );
-  }
-
-  let whatsappMenu = await menuRepo.findOneBy({ name: 'Integrasi WhatsApp' });
-  if (!whatsappMenu) {
-    whatsappMenu = await menuRepo.save(
-      menuRepo.create({
-        name: 'Integrasi WhatsApp',
-        url: '/whatsapp',
-        parent: systemMgmt,
-        order_no: 5,
-      }),
-    );
-  }
-
-  // --- 2. SEED ROLES ---
-  let adminRole = await roleRepo.findOne({ where: { name: 'Super Admin' } });
+  // --- 2. SEED ROLES (Terikat Master Tenant) ---
+  let adminRole = await roleRepo.findOne({
+    where: masterTenant ? { name: 'Super Admin', tenantId: masterTenant.id } : { name: 'Super Admin' },
+  });
 
   if (!adminRole) {
     adminRole = await roleRepo.save(
       roleRepo.create({
         name: 'Super Admin',
         description: 'Full access to everything',
+        tenantId: masterTenant ? masterTenant.id : undefined,
+        tenant: masterTenant || undefined,
       }),
     );
     console.log('✅ Role Super Admin created');
   } else {
-    console.log('ℹ️ Role Super Admin already exists, skipping...');
+    console.log('ℹ️ Role Super Admin sudah ada, melewati pembuatan role.');
   }
 
-  let staffRole = await roleRepo.findOneBy({ name: 'Staff' });
+  let staffRole = await roleRepo.findOne({
+    where: masterTenant ? { name: 'Staff', tenantId: masterTenant.id } : { name: 'Staff' },
+  });
   if (!staffRole) {
     staffRole = await roleRepo.save(
       roleRepo.create({
         name: 'Staff',
         description: 'Limited operational access',
+        tenantId: masterTenant ? masterTenant.id : undefined,
+        tenant: masterTenant || undefined,
       }),
     );
+    console.log('✅ Role Staff created');
   }
 
   // --- 3. SEED PERMISSIONS ---
-  const defaultPermissions = [
-    // Super Admin Permissions (Semua Akses)
-    {
-      role: adminRole,
-      resource: 'Document',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    {
-      role: adminRole,
-      resource: 'User',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    {
-      role: adminRole,
-      resource: 'Role',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    {
-      role: adminRole,
-      resource: 'Menu',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    {
-      role: adminRole,
-      resource: 'Pegawai',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    {
-      role: adminRole,
-      resource: 'Permission',
-      accessLevel: AccessLevel.FULL_AKSES,
-    },
-    // Requested Menu Permissions
-    ...[
-      'menu-album',
-      'menu-barang',
-      'menu-dashboard',
-      'menu-dokumen',
-      'menu-galery',
-      'menu-list-menu',
-      'menu-pegawai-list',
-      'menu-profil-pegawai',
-      'menu-profil-perusahaan',
-      'menu-role',
-      'menu-users-list',
-    ].map((resource) => ({
-      role: adminRole,
-      resource,
-      accessLevel: AccessLevel.FULL_AKSES,
-    })),
+  const allResources = Array.from(
+    new Set([
+      'Document',
+      'User',
+      'Role',
+      'Menu',
+      'Pegawai',
+      'Permission',
+      'Tenant',
+      'Barang',
+      'Gallery',
+      'CompanyProfile',
+      'WhatsApp',
+      ...Array.from(requiredResourcesSet),
+    ]),
+  );
 
-    // Staff Permissions (Hanya View/Akses Terbatas)
-    {
-      role: staffRole,
-      resource: 'Document',
-      accessLevel: AccessLevel.VIEW_AKSES,
-    },
-    {
-      role: staffRole,
-      resource: 'User',
-      accessLevel: AccessLevel.VIEW_AKSES,
-    },
-    {
-      role: staffRole,
-      resource: 'Role',
-      accessLevel: AccessLevel.VIEW_AKSES,
-    },
-    {
-      role: staffRole,
-      resource: 'Pegawai',
-      accessLevel: AccessLevel.VIEW_AKSES,
-    },
-  ];
-
-  for (const perm of defaultPermissions) {
+  for (const resource of allResources) {
     const exists = await permissionRepo.findOneBy({
-      role: { id: perm.role.id },
-      resource: perm.resource,
+      role: { id: adminRole.id },
+      resource,
+      tenantId: masterTenant ? masterTenant.id : undefined as any,
     });
     if (!exists) {
-      await permissionRepo.save(permissionRepo.create(perm));
+      await permissionRepo.save(
+        permissionRepo.create({
+          role: adminRole,
+          resource,
+          accessLevel: AccessLevel.FULL_AKSES,
+          tenantId: masterTenant ? masterTenant.id : undefined,
+          tenant: masterTenant || undefined,
+        }),
+      );
     }
   }
 
-  console.log('✅ Seeding completed!');
+  // Staff Permissions (View Access untuk Resource Utama)
+  const staffResources = ['Document', 'User', 'Role', 'Pegawai'];
+  for (const resource of staffResources) {
+    const exists = await permissionRepo.findOneBy({
+      role: { id: staffRole.id },
+      resource,
+      tenantId: masterTenant ? masterTenant.id : undefined as any,
+    });
+    if (!exists) {
+      await permissionRepo.save(
+        permissionRepo.create({
+          role: staffRole,
+          resource,
+          accessLevel: AccessLevel.VIEW_AKSES,
+          tenantId: masterTenant ? masterTenant.id : undefined,
+          tenant: masterTenant || undefined,
+        }),
+      );
+    }
+  }
+
+  // --- 4. BERSIHKAN CACHE REDIS MENU ---
+  await clearRedisMenuCache();
+
+  console.log('✅ Reset & Recreation Menu Seeding completed successfully!');
 };
