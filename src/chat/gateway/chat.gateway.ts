@@ -83,6 +83,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.id,
       );
 
+      // Kirim daftar seluruh user yang sedang online di tenant kepada client ini
+      const onlineUserIds = await this.presenceService.getOnlineUsers(client.data.tenantId);
+      client.emit('initial_online_users', { userIds: onlineUserIds });
+
       // Broadcast ke semua user di tenant bahwa user ini online
       this.server.to(`tenant:${client.data.tenantId}`).emit('user_online', {
         userId: client.data.userId,
@@ -97,18 +101,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Dipanggil otomatis saat client disconnect.
-   * Hapus status online dan broadcast ke tenant.
+   * Hapus status online dan broadcast ke tenant HANYA jika tidak ada socket aktif lain dari user tersebut.
    */
   async handleDisconnect(client: Socket): Promise<void> {
-    if (!client.data?.userId) return;
+    if (!client.data?.userId || !client.data?.tenantId) return;
 
-    await this.presenceService.setOffline(client.data.tenantId, client.data.userId);
+    // Cek apakah masih ada socket aktif lain milik user ini di room user:{userId}
+    const remainingSockets = await this.server.in(`user:${client.data.userId}`).fetchSockets();
+    if (remainingSockets.length === 0) {
+      await this.presenceService.setOffline(client.data.tenantId, client.data.userId);
 
-    this.server.to(`tenant:${client.data.tenantId}`).emit('user_offline', {
-      userId: client.data.userId,
-    });
+      this.server.to(`tenant:${client.data.tenantId}`).emit('user_offline', {
+        userId: client.data.userId,
+      });
+    }
 
     this.logger.log(`[Disconnect] User ${client.data.userId} (socket: ${client.id})`);
+  }
+
+  /** Event dari client untuk meminta daftar user online di tenant secara manual */
+  @SubscribeMessage('get_online_users')
+  async handleGetOnlineUsers(@ConnectedSocket() client: Socket): Promise<void> {
+    if (client.data?.tenantId) {
+      const onlineUserIds = await this.presenceService.getOnlineUsers(client.data.tenantId);
+      client.emit('initial_online_users', { userIds: onlineUserIds });
+    }
   }
 
   // ─── Events: Percakapan ───────────────────────────────────────────────────────
