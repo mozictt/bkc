@@ -8,6 +8,10 @@ import { ConversationModule } from './conversation/conversation.module';
 import { MessageModule } from './message/message.module';
 import { CommonModule } from '../common/common.module';
 
+import { NotificationsModule } from '../notifications/notifications.module';
+
+import { ChatUploadController } from './chat-upload.controller';
+
 /**
  * ChatModule — modul utama yang mengintegrasikan semua sub-modul chat:
  * kontak, percakapan, pesan, dan WebSocket gateway.
@@ -27,7 +31,9 @@ import { CommonModule } from '../common/common.module';
     ConversationModule,
     forwardRef(() => MessageModule),
     CommonModule,
+    NotificationsModule,
   ],
+  controllers: [ChatUploadController],
   providers: [ChatGateway, PresenceService],
   exports: [ChatGateway],
 })

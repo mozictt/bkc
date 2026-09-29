@@ -98,6 +98,21 @@ export class ConversationService {
   }
 
   /**
+   * Ambil detail percakapan & peserta tanpa validasi user context request (khusus gateway/broadcast).
+   */
+  async findOneRaw(id: string): Promise<Conversation | null> {
+    return this.convRepo
+      .createQueryBuilder('conv')
+      .leftJoinAndSelect('conv.participants', 'participants')
+      .leftJoinAndSelect('participants.user', 'partUser')
+      .leftJoinAndSelect('partUser.pegawai', 'partPegawai')
+      .leftJoinAndSelect('conv.lastMessage', 'lastMsg')
+      .where('conv.id = :id', { id })
+      .andWhere('conv.deletedAt IS NULL')
+      .getOne();
+  }
+
+  /**
    * Ambil detail satu percakapan beserta daftar peserta.
    * Validasi bahwa user adalah peserta aktif percakapan tersebut.
    */

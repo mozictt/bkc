@@ -17,6 +17,8 @@ import { MessageService } from '../message/message.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { TenantContextService } from '../../common/tenant/tenant-context.service';
 import { SendMessageDto } from '../message/dto/send-message.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { NotificationType } from '../../entities/notification.entity';
 
 /**
  * ChatGateway — menangani semua koneksi dan event WebSocket real-time.
@@ -45,6 +47,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly messageService: MessageService,
     private readonly conversationService: ConversationService,
     private readonly tenantContextService: TenantContextService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Lifecycle: Connect & Disconnect ─────────────────────────────────────────
@@ -179,7 +182,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           const msg = await this.messageService.send(data.conversationId, data.message);
           let userIds: number[] = [];
           try {
-            const conv = await this.conversationService.findOne(data.conversationId);
+            const conv = await this.conversationService.findOneRaw(data.conversationId);
             if (conv && conv.participants) {
               userIds = conv.participants.map((p) => p.userId);
             }
@@ -198,7 +201,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Broadcast pesan baru (termasuk balasan thread) ke room conversation
-   * dan channel personal pengguna.
+   * dan simpan entri riwayat notifikasi di DB serta broadcast ke channel personal pengguna.
    */
   async broadcastNewMessage(
     conversationId: string,
@@ -207,13 +210,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ): Promise<void> {
     try {
       let participantUserIds: number[] = [];
+      let conv: any = null;
       try {
-        const conv = await this.conversationService.findOne(conversationId);
+        conv = await this.conversationService.findOneRaw(conversationId);
         if (conv && conv.participants) {
-          participantUserIds = conv.participants.map((p) => p.userId);
+          participantUserIds = conv.participants
+            .filter((p: any) => !p.leftAt)
+            .map((p: any) => Number(p.userId));
         }
       } catch (e) {
-        // Ignore participant lookup error
+        this.logger.error(`Failed participant lookup for conversation ${conversationId}: ${e.message}`);
       }
 
       // Pastikan semua socket aktif dari peserta bergabung ke room conversation
@@ -225,13 +231,62 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ),
       );
 
-      // Broadcast ke room percakapan
+      // Broadcast event new_message ke room percakapan
       this.server.to(`conversation:${conversationId}`).emit('new_message', savedMessage);
 
-      // Broadcast tambahan ke channel user personal untuk menjamin notifikasi popup muncul di halaman manapun
+      // Ambil nama pengirim & nama grup
+      const senderName =
+        savedMessage.sender?.pegawai?.name ||
+        savedMessage.sender?.username ||
+        savedMessage.senderUsername ||
+        `User #${senderUserId ?? ''}`;
+      const isGroup = conv?.type === 'GROUP' || Boolean(conv?.name);
+      const isThreadReply = Boolean(savedMessage.parentMessageId);
+
+      const notifType = isThreadReply
+        ? NotificationType.CHAT_THREAD_REPLY
+        : isGroup
+        ? NotificationType.CHAT_GROUP
+        : NotificationType.CHAT_DIRECT;
+
+      const displayTitle = isThreadReply
+        ? `Balasan Thread (${senderName})`
+        : isGroup
+        ? `${senderName} @ ${conv.name || 'Grup'}`
+        : senderName;
+
+      const actionUrl = savedMessage.parentMessageId
+        ? `/chat?convId=${conversationId}&threadId=${savedMessage.parentMessageId}&msgId=${savedMessage.id}`
+        : `/chat?convId=${conversationId}&msgId=${savedMessage.id}`;
+
+      // Loop untuk setiap penerima (bukan pengirim)
       for (const userId of participantUserIds) {
         if (userId && Number(userId) !== Number(senderUserId)) {
+          // 1. Send event real-time pesan ke user
           this.server.to(`user:${userId}`).emit('new_message', savedMessage);
+
+          // 2. Simpan notifikasi ke basis data (Persistent Notification History)
+          try {
+            const notif = await this.notificationsService.createNotification({
+              userId: Number(userId),
+              tenantId: conv?.tenantId ? String(conv.tenantId) : undefined,
+              type: notifType,
+              title: displayTitle,
+              body: savedMessage.content || (savedMessage.attachmentUrl ? '[Lampiran File]' : 'Pesan baru diterima'),
+              actionUrl,
+              payload: {
+                conversationId,
+                messageId: savedMessage.id,
+                parentMessageId: savedMessage.parentMessageId || null,
+                senderId: senderUserId,
+              },
+            });
+
+            // 3. Broadcast real-time event notification:new ke user socket
+            this.server.to(`user:${userId}`).emit('notification:new', notif);
+          } catch (notifErr) {
+            this.logger.error(`Failed to create notification for user ${userId}: ${notifErr.message}`);
+          }
         }
       }
     } catch (err) {

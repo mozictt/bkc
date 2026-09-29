@@ -254,11 +254,20 @@ export class MessageService {
     if (message.isDeleted) {
       throw new BadRequestException('Tidak dapat mengedit pesan yang sudah dihapus');
     }
-    if (message.type !== MessageType.TEXT) {
-      throw new BadRequestException('Hanya pesan teks yang dapat diedit');
+
+    if (dto.content !== undefined) {
+      message.content = dto.content;
+    }
+    if (dto.attachmentName !== undefined) {
+      message.attachmentName = dto.attachmentName;
+    }
+    if (dto.attachmentUrl !== undefined) {
+      message.attachmentUrl = dto.attachmentUrl;
+    }
+    if (dto.type !== undefined) {
+      message.type = dto.type;
     }
 
-    message.content = dto.content;
     message.isEdited = true;
     message.editedAt = new Date();
     return this.messageRepo.save(message);

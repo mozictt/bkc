@@ -23,6 +23,7 @@ import { PegawaiModule } from './pegawai/pegawai.module';
 import { WilayahModule } from './wilayah/wilayah.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { ChatModule } from './chat/chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import * as dotenv from 'dotenv';
@@ -75,6 +76,7 @@ const importsList: any[] = [
   WilayahModule,
   WhatsappModule,
   ChatModule,
+  NotificationsModule,
 ];
 
 // Deklarasikan MockRedisModule secara Global jika Redis dinonaktifkan

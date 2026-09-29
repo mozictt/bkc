@@ -48,6 +48,9 @@ export const SUPER_ADMIN_RESOURCES: string[] = [
   'menu-tenant',
   'menu-whatsapp',
   'menu-pegawai-management',
+  'menu-chat',
+  'menu-notifikasi-chat',
+  'Notification',
   'Master Data',
 ];
 
@@ -109,22 +112,36 @@ export const MENU_TREE: MenuSeedItem[] = [
   {
     name: 'Pesan',
     url: '',
-    icon: 'database',
+    icon: 'message-square',
     order_no: 4,
     requiredResource: '',
     children: [
       {
+        name: 'Chat Internal',
+        url: '/chat',
+        icon: 'MessageSquare',
+        order_no: 1,
+        requiredResource: 'menu-chat',
+      },
+      {
+        name: 'Notifikasi Chat',
+        url: '/chat/notifications',
+        icon: 'Bell',
+        order_no: 2,
+        requiredResource: 'menu-notifikasi-chat',
+      },
+      {
         name: 'Kontak WhatsApp',
         url: '/whatsapp/contacts',
         icon: 'MessageCircleDashed',
-        order_no: 1,
+        order_no: 3,
         requiredResource: 'menu-kontak-whatsapp',
       },
       {
         name: 'Histori Pesan WhatsApp',
         url: '/whatsapp/history',
         icon: 'MessageCircleIcon',
-        order_no: 2,
+        order_no: 4,
         requiredResource: 'menu-histori-whatsapp',
       },
     ],

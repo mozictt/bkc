@@ -1,9 +1,26 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MinLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { MessageType } from '../../enums/chat.enum';
 
 export class UpdateMessageDto {
-  @ApiProperty({ description: 'Konten teks pesan yang diperbarui', example: 'Pesan yang sudah diedit' })
+  @ApiPropertyOptional({ description: 'Konten teks pesan atau keterangan (caption) yang diperbarui', example: 'Pesan / caption yang sudah diedit' })
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({ description: 'Nama file attachment yang diperbarui' })
+  @IsOptional()
+  @IsString()
+  attachmentName?: string;
+
+  @ApiPropertyOptional({ description: 'URL attachment yang diperbarui' })
+  @IsOptional()
+  @IsString()
+  attachmentUrl?: string;
+
+  @ApiPropertyOptional({ enum: MessageType, description: 'Tipe pesan jika mengganti berkas (image, video, file, audio)' })
+  @IsOptional()
+  @IsEnum(MessageType)
+  type?: MessageType;
 }
+

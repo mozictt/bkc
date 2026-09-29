@@ -251,8 +251,8 @@ export const runMenuSeed = async (dataSource: DataSource) => {
     }
   }
 
-  // Staff Permissions (View Access untuk Resource Utama)
-  const staffResources = ['Document', 'User', 'Role', 'Pegawai'];
+  // Staff Permissions (View Access untuk Resource Utama & Chat)
+  const staffResources = ['Document', 'User', 'Role', 'Pegawai', 'menu-chat', 'menu-notifikasi-chat'];
   for (const resource of staffResources) {
     const exists = await permissionRepo.findOneBy({
       role: { id: staffRole.id },

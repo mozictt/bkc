@@ -80,15 +80,19 @@ export class MessageController {
   }
 
   @Patch(':messageId')
-  @ApiOperation({ summary: 'Edit konten pesan (hanya pengirim)' })
+  @ApiOperation({ summary: 'Edit konten atau keterangan (caption) pesan (hanya pengirim)' })
   @ApiParam({ name: 'conversationId', description: 'UUID percakapan' })
   @ApiParam({ name: 'messageId', description: 'UUID pesan' })
-  update(
+  async update(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Body() dto: UpdateMessageDto,
   ) {
-    return this.messageService.update(conversationId, messageId, dto);
+    const updated = await this.messageService.update(conversationId, messageId, dto);
+    if (this.chatGateway) {
+      this.chatGateway.broadcastMessageUpdate(conversationId, updated);
+    }
+    return updated;
   }
 
   @Delete(':messageId')
