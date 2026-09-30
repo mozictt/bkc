@@ -117,14 +117,14 @@ export const MENU_TREE: MenuSeedItem[] = [
     requiredResource: '',
     children: [
       {
-        name: 'Chat Internal',
+        name: 'Chat',
         url: '/chat',
         icon: 'MessageSquare',
         order_no: 1,
         requiredResource: 'menu-chat',
       },
       {
-        name: 'Notifikasi Chat',
+        name: 'History Chat',
         url: '/chat/notifications',
         icon: 'Bell',
         order_no: 2,

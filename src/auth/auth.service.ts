@@ -115,7 +115,7 @@ export class AuthService {
     };
   }
 
-  async refresh(userId: number, token: string) {
+  async refresh(userId: number, token: string, req?: any) {
     // 🔥 1. Verifikasi dan dekode JWT refresh token
     let decodedToken: any;
     try {
@@ -132,10 +132,19 @@ export class AuthService {
     }
 
     // 🔥 2. Cek kecocokan token dengan DB jika bukan mode impersonasi
-    if (!decodedToken?.isImpersonated && user.refreshToken) {
+    if (!decodedToken?.isImpersonated) {
+      // Jika user tidak punya refreshToken di DB, tolak request
+      if (!user.refreshToken) {
+        throw new UnauthorizedException('Sesi tidak ditemukan. Silakan login kembali.');
+      }
+
+      // Cek apakah token lama masih dalam grace period Redis
+      // (untuk handle race condition saat multi-tab / concurrent request)
+      const graceKey = `refresh_grace:${user.id}:${token.slice(-20)}`;
+      const isInGrace = await this.redis.get(graceKey);
+
       const isExactMatch = user.refreshToken === token;
-      const isTruncatedMatch = token.startsWith(user.refreshToken);
-      if (!isExactMatch && !isTruncatedMatch) {
+      if (!isExactMatch && !isInGrace) {
         throw new UnauthorizedException('Refresh token tidak valid atau telah digantikan');
       }
     }
@@ -168,7 +177,34 @@ export class AuthService {
     });
 
     if (!decodedToken?.isImpersonated) {
+      // Simpan token lama ke grace period 30 detik agar concurrent request tidak langsung gagal
+      const graceKey = `refresh_grace:${user.id}:${token.slice(-20)}`;
+      await this.redis.set(graceKey, 'valid', 'EX', 30);
+
       await this.userService.updateRefreshToken(user.id, refreshToken);
+    }
+
+    // 🔥 4. Catat aktivitas refresh token dengan tenantId dari user DB (bukan request.user)
+    try {
+      const path = req?.originalUrl || req?.url || '/auth/refresh';
+      const rawIp = req?.headers?.['x-forwarded-for'] || req?.connection?.remoteAddress || req?.ip;
+      const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+      const userAgent = req?.headers?.['user-agent'];
+
+      await this.activityLogsService.createLog({
+        tenantId: user.tenantId || null,
+        userId: user.id,
+        username: user.username,
+        action: 'REFRESH_TOKEN',
+        module: 'AUTH',
+        description: `User ${user.username} berhasil memperbarui access token.`,
+        method: 'POST',
+        path,
+        ipAddress: ipAddress ? String(ipAddress) : null,
+        userAgent: userAgent ? String(userAgent) : null,
+      });
+    } catch (e) {
+      console.error('Gagal mencatat log refresh token:', e);
     }
 
     return { accessToken, refreshToken };

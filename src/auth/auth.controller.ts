@@ -55,8 +55,8 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Refresh token tidak valid atau kadaluarsa' })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refresh(refreshTokenDto.userId, refreshTokenDto.refreshToken);
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() req: any) {
+    return this.authService.refresh(refreshTokenDto.userId, refreshTokenDto.refreshToken, req);
   }
 
   @Post('register')
