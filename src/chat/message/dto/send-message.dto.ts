@@ -37,4 +37,12 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   attachmentName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Daftar User ID yang di-mention dalam pesan',
+    example: [1, 2],
+    type: [Number],
+  })
+  @IsOptional()
+  mentionedUserIds?: number[];
 }

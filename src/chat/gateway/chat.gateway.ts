@@ -180,6 +180,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client,
         async () => {
           const msg = await this.messageService.send(data.conversationId, data.message);
+          if (data.message?.mentionedUserIds) {
+            (msg as any).mentionedUserIds = data.message.mentionedUserIds;
+          }
           let userIds: number[] = [];
           try {
             const conv = await this.conversationService.findOneRaw(data.conversationId);
@@ -242,22 +245,61 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `User #${senderUserId ?? ''}`;
       const isGroup = conv?.type === 'GROUP' || Boolean(conv?.name);
       const isThreadReply = Boolean(savedMessage.parentMessageId);
-
-      const notifType = isThreadReply
-        ? NotificationType.CHAT_THREAD_REPLY
-        : isGroup
-        ? NotificationType.CHAT_GROUP
-        : NotificationType.CHAT_DIRECT;
-
-      const displayTitle = isThreadReply
-        ? `Balasan Thread (${senderName})`
-        : isGroup
-        ? `${senderName} @ ${conv.name || 'Grup'}`
-        : senderName;
+      const isDocShared = Boolean(
+        savedMessage.attachmentUrl ||
+        savedMessage.attachmentName ||
+        ['file', 'image', 'video', 'audio', 'doc'].includes(String(savedMessage.type).toLowerCase())
+      );
 
       const actionUrl = savedMessage.parentMessageId
         ? `/chat?convId=${conversationId}&threadId=${savedMessage.parentMessageId}&msgId=${savedMessage.id}`
         : `/chat?convId=${conversationId}&msgId=${savedMessage.id}`;
+
+      // Helper untuk deteksi apakah pengguna tertentu di-mention dalam pesan
+      const isUserMentioned = (targetUserId: number): boolean => {
+        if (!savedMessage.content && !savedMessage.mentionedUserIds) return false;
+
+        // 1. Cek dari array mentionedUserIds DTO / property jika ada
+        const mentionedIds = savedMessage.mentionedUserIds || savedMessage.payload?.mentionedUserIds;
+        if (
+          Array.isArray(mentionedIds) &&
+          mentionedIds.map(Number).includes(targetUserId)
+        ) {
+          return true;
+        }
+
+        if (!savedMessage.content) return false;
+
+        // 2. Cek substring mention dari daftar peserta
+        const contentLower = savedMessage.content.toLowerCase();
+        if (
+          contentLower.includes(`@[${targetUserId}]`) ||
+          contentLower.includes(`@[${targetUserId}:`)
+        ) {
+          return true;
+        }
+
+        // Cek data user dari list participants conv
+        const participantObj = conv?.participants?.find(
+          (p: any) => Number(p.userId) === targetUserId,
+        );
+        const pUser = participantObj?.user;
+        if (pUser?.username && contentLower.includes(`@${pUser.username.toLowerCase()}`)) {
+          return true;
+        }
+        if (pUser?.pegawai?.name) {
+          const pNameLower = pUser.pegawai.name.toLowerCase();
+          const pNameUnderscoreLower = pNameLower.replace(/\s+/g, '_');
+          if (
+            contentLower.includes(`@${pNameLower}`) ||
+            contentLower.includes(`@${pNameUnderscoreLower}`)
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      };
 
       // Loop untuk setiap penerima (bukan pengirim)
       for (const userId of participantUserIds) {
@@ -265,20 +307,47 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           // 1. Send event real-time pesan ke user
           this.server.to(`user:${userId}`).emit('new_message', savedMessage);
 
+          // Cek apakah user ini di-mention
+          const userMentioned = isUserMentioned(Number(userId));
+
+          const userNotifType = userMentioned
+            ? NotificationType.CHAT_MENTION
+            : isDocShared
+            ? NotificationType.DOC_SHARED
+            : isThreadReply
+            ? NotificationType.CHAT_THREAD_REPLY
+            : isGroup
+            ? NotificationType.CHAT_GROUP
+            : NotificationType.CHAT_DIRECT;
+
+          const userDisplayTitle = userMentioned
+            ? `${senderName} menyebut Anda @ ${conv?.name || 'Grup'}`
+            : isDocShared
+            ? `${senderName} membagikan dokumen ${conv?.name ? '@ ' + conv.name : ''}`
+            : isThreadReply
+            ? `Balasan Thread (${senderName})`
+            : isGroup
+            ? `${senderName} @ ${conv?.name || 'Grup'}`
+            : senderName;
+
           // 2. Simpan notifikasi ke basis data (Persistent Notification History)
           try {
             const notif = await this.notificationsService.createNotification({
               userId: Number(userId),
               tenantId: conv?.tenantId ? String(conv.tenantId) : undefined,
-              type: notifType,
-              title: displayTitle,
-              body: savedMessage.content || (savedMessage.attachmentUrl ? '[Lampiran File]' : 'Pesan baru diterima'),
+              type: userNotifType,
+              title: userDisplayTitle,
+              body: savedMessage.content || (savedMessage.attachmentUrl ? `[Lampiran File] ${savedMessage.attachmentName || ''}` : 'Pesan baru diterima'),
               actionUrl,
               payload: {
                 conversationId,
                 messageId: savedMessage.id,
                 parentMessageId: savedMessage.parentMessageId || null,
                 senderId: senderUserId,
+                isMention: userMentioned,
+                isDocShared,
+                attachmentUrl: savedMessage.attachmentUrl || null,
+                attachmentName: savedMessage.attachmentName || null,
               },
             });
 

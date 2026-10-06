@@ -165,28 +165,29 @@ export class GalleryService {
     if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
     else if (ext === '.png') contentType = 'image/png';
     else if (ext === '.webp') contentType = 'image/webp';
-    else if (ext === '.mp4') contentType = 'video/mp4';
+    else if (ext === '.gif') contentType = 'image/gif';
+    else if (['.mp4', '.m4v'].includes(ext)) contentType = 'video/mp4';
     else if (ext === '.webm') contentType = 'video/webm';
+    else if (ext === '.mov') contentType = 'video/quicktime';
+    else if (ext === '.mkv') contentType = 'video/x-matroska';
+    else if (ext === '.avi') contentType = 'video/x-msvideo';
+    else if (['.ogv', '.ogg'].includes(ext)) contentType = 'video/ogg';
 
-    const MAX_CHUNK_SIZE = 8 * 1024 * 1024; // 8MB per chunk untuk responsivitas streaming & seeking di cloud
+    const isVideoFile = contentType.startsWith('video/') || ['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v', '.3gp'].includes(ext);
 
     // Respons 206 Partial Content jika ada header Range dan tipe file adalah video
-    if (range && contentType.startsWith('video/')) {
+    if (range && isVideoFile) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
-      
+
       if (isNaN(start) || start >= fileSize || start < 0) {
         res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
         return res.end();
       }
 
-      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+      let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      if (isNaN(end) || end - start + 1 > MAX_CHUNK_SIZE) {
-        end = start + MAX_CHUNK_SIZE - 1;
-      }
-
-      if (end >= fileSize) {
+      if (isNaN(end) || end >= fileSize) {
         end = fileSize - 1;
       }
 

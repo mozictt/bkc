@@ -72,6 +72,9 @@ export class MessageController {
     @Body() dto: SendMessageDto,
   ) {
     const savedMessage = await this.messageService.send(conversationId, dto);
+    if (dto?.mentionedUserIds) {
+      (savedMessage as any).mentionedUserIds = dto.mentionedUserIds;
+    }
     if (this.chatGateway) {
       const senderUserId = (savedMessage as any).senderId || (savedMessage as any).sender?.id;
       await this.chatGateway.broadcastNewMessage(conversationId, savedMessage, senderUserId);
