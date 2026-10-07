@@ -54,6 +54,18 @@ export class TransactionFilterDto {
   @IsDateString()
   endDate?: string;
 
+  @ApiPropertyOptional({ example: 10, description: 'Bulan (1-12)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  month?: number;
+
+  @ApiPropertyOptional({ example: 2026, description: 'Tahun (YYYY)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  year?: number;
+
   @ApiPropertyOptional({ example: true, description: 'Filter hanya pengeluaran rutin' })
   @IsOptional()
   @Type(() => Boolean)

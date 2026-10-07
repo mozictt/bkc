@@ -77,6 +77,27 @@ export class TransactionService extends BaseTenantService<Transaction> {
       });
     }
 
+    // Filter berdasarkan bulan & tahun jika startDate & endDate tidak diberikan
+    if (filter.year && !filter.startDate && !filter.endDate) {
+      if (filter.month) {
+        const lastDay = new Date(filter.year, filter.month, 0).getDate();
+        const mStr = String(filter.month).padStart(2, '0');
+        const startStr = `${filter.year}-${mStr}-01`;
+        const endStr = `${filter.year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+        qb.andWhere('trx.transactionDate >= :mStart AND trx.transactionDate <= :mEnd', {
+          mStart: startStr,
+          mEnd: endStr,
+        });
+      } else {
+        const startOfYear = `${filter.year}-01-01`;
+        const endOfYear = `${filter.year}-12-31`;
+        qb.andWhere('trx.transactionDate >= :yStart AND trx.transactionDate <= :yEnd', {
+          yStart: startOfYear,
+          yEnd: endOfYear,
+        });
+      }
+    }
+
     // Filter pengeluaran rutin
     if (filter.isRecurring !== undefined) {
       qb.andWhere('trx.isRecurring = :isRecurring', {
