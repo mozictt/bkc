@@ -27,6 +27,7 @@ import { TransactionService } from '../services/transaction.service';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { TransactionFilterDto } from '../dto/transaction-filter.dto';
+import { TransactionSuggestionQueryDto } from '../dto/transaction-suggestion-query.dto';
 import { GenerateIncomeDto } from '../dto/generate-income.dto';
 import { diskStorage } from 'multer';
 import { extname, join, isAbsolute, resolve } from 'path';
@@ -100,6 +101,19 @@ export class TransactionController {
   @ApiOperation({ summary: 'List transaksi dengan filter dan pagination' })
   async findAll(@Query() filter: TransactionFilterDto) {
     return this.transactionService.findAll(filter);
+  }
+
+  @Get('rumah-tangga/transactions/suggestions')
+  @RequirePermission('rumah-tangga.transaksi', 'view')
+  @ApiTags('Rumah Tangga - Transaksi')
+  @ApiOperation({
+    summary: 'Daftar saran/autocomplete judul deskripsi transaksi dari riwayat transaksi',
+    description:
+      'Mengambil daftar deskripsi unik dari riwayat transaksi untuk autocomplete pada form. ' +
+      'Mendukung pencarian kata kunci, filter tipe transaksi, dan mengembalikan kategori yang paling sering digunakan.',
+  })
+  async getSuggestions(@Query() query: TransactionSuggestionQueryDto) {
+    return this.transactionService.getSuggestions(query);
   }
 
   @Get('rumah-tangga/transactions/:id')

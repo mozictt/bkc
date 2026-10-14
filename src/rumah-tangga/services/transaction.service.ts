@@ -15,6 +15,7 @@ import { BaseTenantService } from '../../common/tenant/base-tenant.service';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { TransactionFilterDto } from '../dto/transaction-filter.dto';
+import { TransactionSuggestionQueryDto } from '../dto/transaction-suggestion-query.dto';
 import { tenantLeftJoin } from '../../common/utils/query-utils';
 
 @Injectable()
@@ -133,6 +134,66 @@ export class TransactionService extends BaseTenantService<Transaction> {
       totalPages: Math.ceil(total / limit),
       array: data,
     };
+  }
+
+  /**
+   * Mengambil daftar saran (autocomplete) judul/deskripsi transaksi unik
+   * berdasarkan riwayat transaksi yang pernah dimasukkan (kolom description).
+   *
+   * Fitur:
+   * 1. Mengelompokkan riwayat berdasarkan deskripsi unik (tanpa duplikat).
+   * 2. Menampilkan informasi kategori terakhir/paling sering digunakan.
+   * 3. Diurutkan berdasarkan frekuensi pemakaian terbanyak & tanggal terbaru.
+   * 4. Terisolasi per tenant dan aman dari SQL Injection (query binding).
+   */
+  async getSuggestions(query: TransactionSuggestionQueryDto): Promise<{
+    description: string;
+    categoryId?: number;
+    categoryName?: string;
+    type?: string;
+    frequency: number;
+  }[]> {
+    const limit = Math.max(1, Math.min(30, query.limit || 10));
+    const tid = this.tenantId;
+
+    const qb = this.transactionRepo
+      .createQueryBuilder('trx')
+      .select('trx.description', 'description')
+      .addSelect('MAX(trx.categoryId)', 'categoryId')
+      .addSelect('MAX(cat.name)', 'categoryName')
+      .addSelect('MAX(trx.type)', 'type')
+      .addSelect('COUNT(trx.id)', 'frequency')
+      .addSelect('MAX(trx.transactionDate)', 'lastUsedDate')
+      .leftJoin('trx.category', 'cat', 'cat.tenantId = :tid AND cat.deletedAt IS NULL', { tid })
+      .where('trx.tenantId = :tid', { tid })
+      .andWhere('trx.deletedAt IS NULL')
+      .andWhere('trx.description IS NOT NULL')
+      .andWhere("TRIM(trx.description) != ''");
+
+    if (query.type) {
+      qb.andWhere('trx.type = :type', { type: query.type });
+    }
+
+    if (query.search && query.search.trim()) {
+      qb.andWhere('LOWER(trx.description) LIKE :search', {
+        search: `%${query.search.trim().toLowerCase()}%`,
+      });
+    }
+
+    qb.groupBy('trx.description')
+      .orderBy('COUNT(trx.id)', 'DESC')
+      .addOrderBy('MAX(trx.transactionDate)', 'DESC')
+      .limit(limit);
+
+    const rawList = await qb.getRawMany();
+
+    return rawList.map((item) => ({
+      description: item.description,
+      categoryId: item.categoryId ? Number(item.categoryId) : undefined,
+      categoryName: item.categoryName || undefined,
+      type: item.type,
+      frequency: Number(item.frequency || 0),
+    }));
   }
 
   async findOne(id: number): Promise<Transaction> {
