@@ -1,9 +1,9 @@
-// src/users/users.service.ts
 import {
   Injectable,
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +12,7 @@ import { Pegawai } from '../entities/pegawai.entity';
 import { Tenant } from '../entities/tenant.entity';
 import { Role } from '../role/entities/role.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
+import { ROLE_SUPER_ADMIN, isSuperAdminRole } from '@common/constants/role.constant';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -44,10 +45,16 @@ export class UsersService {
   }
 
   async findById(id: number) {
-    return this.userRepo.findOne({
+    const user = await this.userRepo.findOne({
       where: { id },
       relations: ['role', 'tenant', 'role.permissions', 'pegawai'],
     });
+
+    if (user && isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
+    }
+
+    return user;
   }
 
   async findUserWithPermissions(userId: number) {
@@ -130,6 +137,12 @@ export class UsersService {
       throw new ConflictException(`Pegawai "${pegawai.name}" sudah memiliki akun user.`);
     }
 
+    // 5. Validasi otorisasi role: Role Super Admin hanya dapat dibuat oleh Super Admin
+    const targetRole = await this.roleRepo.findOne({ where: { id: targetRoleId } });
+    if (targetRole && isSuperAdminRole(targetRole.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan membuat akun dengan role Super Admin.');
+    }
+
     const user = this.userRepo.create({
       username,
       password: passwordHash,
@@ -168,6 +181,14 @@ export class UsersService {
 
     if (tenantId) {
       queryBuilder.andWhere('user.tenantId = :tenantId', { tenantId });
+    }
+
+    // 🛡️ User Super Admin hanya tampil jika pengguna yang login adalah Super Admin
+    if (!this.tenantContext.isSuperAdmin()) {
+      queryBuilder.andWhere(
+        '(role.name IS NULL OR LOWER(role.name) != LOWER(:superAdminRole))',
+        { superAdminRole: ROLE_SUPER_ADMIN },
+      );
     }
 
     if (search) {
@@ -218,6 +239,14 @@ export class UsersService {
 
     if (tenantId) {
       queryBuilder.andWhere('user.tenantId = :tenantId', { tenantId });
+    }
+
+    // 🛡️ User Super Admin hanya tampil jika pengguna yang login adalah Super Admin
+    if (!this.tenantContext.isSuperAdmin()) {
+      queryBuilder.andWhere(
+        '(role.name IS NULL OR LOWER(role.name) != LOWER(:superAdminRole))',
+        { superAdminRole: ROLE_SUPER_ADMIN },
+      );
     }
 
     if (search) {
@@ -272,6 +301,11 @@ export class UsersService {
       throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
     }
 
+    // 🛡️ Cegah user non-super-admin mengedit user yang memiliki role Super Admin
+    if (isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan mengubah akun Super Admin.');
+    }
+
     // Cek jika username diubah dan sudah dipakai user lain
     if (dto.username && dto.username !== user.username) {
       const existingUser = await this.userRepo.findOne({
@@ -292,7 +326,12 @@ export class UsersService {
       user.password = await bcrypt.hash(dto.password, 10);
     }
 
+    // 🛡️ Cegah user non-super-admin menetapkan role Super Admin
     if (dto.role_id) {
+      const targetRole = await this.roleRepo.findOne({ where: { id: dto.role_id } });
+      if (targetRole && isSuperAdminRole(targetRole.name) && !this.tenantContext.isSuperAdmin()) {
+        throw new ForbiddenException('Hanya Super Admin yang diizinkan menetapkan role Super Admin.');
+      }
       user.role = { id: dto.role_id } as any;
     }
 
@@ -320,10 +359,16 @@ export class UsersService {
         id,
         tenantId: tenantId ? tenantId : undefined,
       },
+      relations: ['role'],
     });
 
     if (!user) {
       throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
+    }
+
+    // 🛡️ Cegah user non-super-admin mengubah status Super Admin
+    if (isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan mengubah status akun Super Admin.');
     }
 
     user.is_active = isActive;
@@ -351,10 +396,16 @@ export class UsersService {
         id,
         tenantId: tenantId ? tenantId : undefined,
       },
+      relations: ['role'],
     });
 
     if (!user) {
       throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
+    }
+
+    // 🛡️ Cegah user non-super-admin menghapus akun Super Admin
+    if (isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan menghapus akun Super Admin.');
     }
 
     await this.userRepo.softRemove(user);
@@ -378,10 +429,16 @@ export class UsersService {
         id,
         tenantId: tenantId ? tenantId : undefined,
       },
+      relations: ['role'],
     });
 
     if (!user) {
       throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
+    }
+
+    // 🛡️ Cegah user non-super-admin mereset password akun Super Admin
+    if (isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan mereset password akun Super Admin.');
     }
 
     const targetPassword = newPassword && newPassword.trim() ? newPassword.trim() : 'password123';

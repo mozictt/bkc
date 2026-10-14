@@ -7,13 +7,14 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { AddPermissionsDto } from './dto/add-permission-role.dto';
 import { ResponseMessage } from '@common/decorators/message.decorator';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
@@ -43,9 +44,29 @@ export class RoleController {
 
   @Get()
   @RequirePermission('Role', 'view')
-  @ApiOperation({ summary: 'Mendapatkan daftar semua Role (dengan Pagination)' })
-  findAll() {
-    return this.roleService.findAll();
+  @ApiOperation({
+    summary: 'Mendapatkan daftar semua Role (dengan Pagination dan Filter)',
+    description: 'Mengambil daftar role pada tenant aktif. Role Super Admin hanya disertakan jika pemanggil adalah Super Admin.',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'search', required: false, type: String, example: 'admin' })
+  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'id' })
+  @ApiQuery({ name: 'sortType', required: false, enum: ['ASC', 'DESC'], example: 'DESC' })
+  findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortType') sortType?: 'ASC' | 'DESC',
+  ) {
+    return this.roleService.findAll(
+      page ? +page : 1,
+      limit ? +limit : 10,
+      search || '',
+      sortBy || 'id',
+      sortType || 'DESC',
+    );
   }
 
   @Get('menu')

@@ -181,7 +181,7 @@ export class UsersController {
   @RequirePermission('User', 'view')
   @ApiOperation({
     summary: 'Mendapatkan SELURUH daftar Pengguna tanpa pagination (untuk Select2 / Dropdown / List Lengkap)',
-    description: 'Mengambil seluruh daftar pengguna aktif/semua pada tenant aktif.',
+    description: 'Mengambil seluruh daftar pengguna aktif/semua pada tenant aktif. Pengguna dengan role Super Admin hanya disertakan jika pemanggil memiliki role Super Admin.',
   })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'john' })
   @ApiQuery({ name: 'is_active', required: false, type: Boolean, example: true })
@@ -199,7 +199,7 @@ export class UsersController {
   @RequirePermission('User', 'view')
   @ApiOperation({
     summary: 'Mendapatkan daftar seluruh Pengguna (dengan Pagination, Search Username/Role, dan Filter)',
-    description: 'Mengambil daftar pengguna yang ter-scope pada tenant aktif. Jika all=true, mengembalikan seluruh list tanpa pagination.',
+    description: 'Mengambil daftar pengguna yang ter-scope pada tenant aktif. Pengguna dengan role Super Admin hanya disertakan jika pemanggil memiliki role Super Admin. Jika all=true, mengembalikan seluruh list tanpa pagination.',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })

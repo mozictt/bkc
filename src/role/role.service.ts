@@ -9,6 +9,7 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { AddPermissionsDto } from './dto/add-permission-role.dto';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
+import { ROLE_SUPER_ADMIN } from '@common/constants/role.constant';
 import { Role } from './entities/role.entity';
 import { Menu } from '@entities/menu.entity';
 import { Permission } from '@entities/permission.entity';
@@ -115,6 +116,13 @@ export class RoleService {
 
     const queryBuilder = this.roleRepository.createQueryBuilder('role');
     queryBuilder.where('role.tenantId = :tenantId', { tenantId });
+
+    // 🛡️ Role Super Admin hanya tampil jika pengguna yang login adalah Super Admin
+    if (!this.tenantService.isSuperAdmin()) {
+      queryBuilder.andWhere('LOWER(role.name) != LOWER(:superAdminRole)', {
+        superAdminRole: ROLE_SUPER_ADMIN,
+      });
+    }
 
     if (search) {
       queryBuilder.andWhere('LOWER(role.name) LIKE :search', {

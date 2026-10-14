@@ -44,6 +44,7 @@ export class PermissionSyncItemDto {
     example: AccessLevel.FULL_AKSES,
     description: 'Level akses untuk resource ini',
   })
+  @IsNotEmpty({ message: 'accessLevel tidak boleh kosong' })
   @IsEnum(AccessLevel, {
     message: `AccessLevel harus salah satu dari: ${Object.values(AccessLevel).join(', ')}`,
   })

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AsyncLocalStorage } from 'async_hooks';
+import { isSuperAdminRole } from '../constants/role.constant';
 
 @Injectable()
 export class TenantContextService {
@@ -67,6 +68,13 @@ export class TenantContextService {
     return originTenantId !== undefined && originTenantId !== null
       ? String(originTenantId)
       : undefined;
+  }
+
+  /**
+   * Mengecek apakah role pengguna yang sedang login adalah Super Admin
+   */
+  isSuperAdmin(): boolean {
+    return isSuperAdminRole(this.getRole());
   }
 }
 

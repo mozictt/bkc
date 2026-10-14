@@ -118,6 +118,21 @@ export class PermissionsController {
     return this.permissionService.getGroupedResourcePermissions(roleId);
   }
 
+  @Put('sync')
+  @RequirePermission('Permission', 'update')
+  @ApiOperation({
+    summary: 'Bulk Sync / Upsert banyak hak akses (Permissions) sekaligus untuk sebuah Role',
+    description: 'Memperbarui atau menambahkan daftar permissions secara massal (bulk) untuk suatu role.',
+  })
+  @ApiBody({ type: SyncRolePermissionsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Daftar hak akses permissions berhasil di-sync secara massal.',
+  })
+  syncPermissions(@Body() dto: SyncRolePermissionsDto) {
+    return this.permissionService.syncRolePermissions(dto);
+  }
+
   @Put(':id')
   @RequirePermission('Permission', 'update')
   @ApiOperation({
@@ -134,21 +149,6 @@ export class PermissionsController {
     @Body() dto: UpdatePermissionByIdDto,
   ) {
     return this.permissionService.updatePermissionById(id, dto);
-  }
-
-  @Put('sync')
-  @RequirePermission('Permission', 'update')
-  @ApiOperation({
-    summary: 'Bulk Sync / Upsert banyak hak akses (Permissions) sekaligus untuk sebuah Role',
-    description: 'Memperbarui atau menambahkan daftar permissions secara massal (bulk) untuk suatu role.',
-  })
-  @ApiBody({ type: SyncRolePermissionsDto })
-  @ApiResponse({
-    status: 200,
-    description: 'Daftar hak akses permissions berhasil di-sync secara massal.',
-  })
-  syncPermissions(@Body() dto: SyncRolePermissionsDto) {
-    return this.permissionService.syncRolePermissions(dto);
   }
 
   @Post('copy')

@@ -2,6 +2,7 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DataSource, Repository, In } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -39,6 +40,11 @@ export class MenuService {
   }
 
   async createMenu(data: CreateMenuDto): Promise<Menu> {
+    // 🛡️ Hanya Super Admin yang diizinkan membuat menu baru
+    if (!this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan membuat menu baru.');
+    }
+
     const tenantId = this.tenantContext.getTenantId();
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -264,6 +270,11 @@ export class MenuService {
   }
 
   async updateMenu(id: number, updateData: UpdateMenuDto): Promise<Menu> {
+    // 🛡️ Hanya Super Admin yang diizinkan memperbarui data menu
+    if (!this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan memperbarui data menu.');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -299,7 +310,7 @@ export class MenuService {
       return updated;
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof NotFoundException || err instanceof BadRequestException) {
+      if (err instanceof NotFoundException || err instanceof BadRequestException || err instanceof ForbiddenException) {
         throw err;
       }
       throw new InternalServerErrorException('Failed to update menu');
@@ -309,6 +320,11 @@ export class MenuService {
   }
 
   async deleteMenu(id: number): Promise<void> {
+    // 🛡️ Hanya Super Admin yang diizinkan menghapus menu
+    if (!this.tenantContext.isSuperAdmin()) {
+      throw new ForbiddenException('Hanya Super Admin yang diizinkan menghapus menu.');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -322,6 +338,9 @@ export class MenuService {
       await this.invalidateMenuCache();
     } catch (err) {
       await queryRunner.rollbackTransaction();
+      if (err instanceof NotFoundException || err instanceof ForbiddenException) {
+        throw err;
+      }
       throw new InternalServerErrorException('Failed to delete menu');
     } finally {
       await queryRunner.release();
