@@ -125,7 +125,7 @@ export class AuthService {
     }
 
     const targetUserId = Number(userId || decodedToken?.sub);
-    const user = await this.userService.findById(targetUserId);
+    const user = await this.userService.findById(targetUserId, false);
 
     if (!user) {
       throw new UnauthorizedException('User tidak ditemukan');
@@ -395,7 +395,7 @@ export class AuthService {
     }
 
     const masterUserId = currentUserPayload.impersonator.id;
-    const masterUser = await this.userService.findById(+masterUserId);
+    const masterUser = await this.userService.findById(+masterUserId, false);
 
     if (!masterUser || !masterUser.is_active) {
       throw new BadRequestException('Akun Master Tenant tidak ditemukan atau dalam status non-aktif.');

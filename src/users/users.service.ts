@@ -44,13 +44,13 @@ export class UsersService {
     });
   }
 
-  async findById(id: number) {
+  async findById(id: number, validateSuperAdmin = true) {
     const user = await this.userRepo.findOne({
       where: { id },
       relations: ['role', 'tenant', 'role.permissions', 'pegawai'],
     });
 
-    if (user && isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
+    if (validateSuperAdmin && user && isSuperAdminRole(user.role?.name) && !this.tenantContext.isSuperAdmin()) {
       throw new NotFoundException(`User dengan ID #${id} tidak ditemukan.`);
     }
 
