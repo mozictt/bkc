@@ -1,13 +1,15 @@
-import { Injectable, InternalServerErrorException, NotFoundException, StreamableFile } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException, StreamableFile } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, ILike, In } from 'typeorm';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
 import { UpdateGalleryDto } from './dto/update-gallery.dto';
+import { UploadChunkDto } from './dto/upload-chunk.dto';
 import { Gallery } from './entities/gallery.entity';
 import { Album } from './entities/album.entity';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import sharp from 'sharp';
@@ -99,8 +101,16 @@ export class GalleryService {
                 .webp({ quality: 75 })
                 .toFile(thumbPath);
             } else if (mediaType === 'video') {
-              await this.optimizeVideoFastStart(targetFilePath);
-              await this.generateVideoThumbnail(targetFilePath, thumbPath);
+              // Asynchronous non-blocking: jalankan optimasi FFmpeg di background agar request HTTP
+              // langsung selesai dan tidak terputus oleh batas waktu gateway Cloudflare Tunnel (100s)
+              setImmediate(async () => {
+                try {
+                  await this.generateVideoThumbnail(targetFilePath, thumbPath);
+                  await this.optimizeVideoFastStart(targetFilePath);
+                } catch (bgErr) {
+                  console.warn(`[GalleryService] Gagal memproses video di background (${targetFilePath}):`, bgErr);
+                }
+              });
             }
           } catch (err) {
             console.warn(`[GalleryService] Gagal generate thumbnail untuk ${targetFilePath}:`, err);
@@ -146,6 +156,145 @@ export class GalleryService {
       throw error instanceof InternalServerErrorException
         ? error
         : new InternalServerErrorException('Gagal memproses dan menyimpan media');
+    }
+  }
+
+  /**
+   * Menangani unggahan potongan berkas (Chunked Upload).
+   * Mencegah pembatasan 100MB Cloudflare Zero Trust Free dan mengoptimalkan penggunaan memori server via Stream.
+   */
+  async handleChunkUpload(file: MulterFile, dto: UploadChunkDto) {
+    if (!file) {
+      throw new BadRequestException('Potongan berkas (chunk) tidak ditemukan');
+    }
+
+    // Sanitasi uploadId untuk mencegah path traversal
+    const sanitizedUploadId = dto.uploadId.replace(/[^a-zA-Z0-9_\-]/g, '');
+    if (!sanitizedUploadId) {
+      throw new BadRequestException('ID sesi unggah tidak valid');
+    }
+
+    const chunkDir = path.join(process.cwd(), 'storage/uploads/gallery/.chunks', sanitizedUploadId);
+    UploadStorageHelper.ensureDirectoryExists(chunkDir);
+
+    const chunkPath = path.join(chunkDir, `${dto.chunkIndex}.part`);
+
+    // Pindahkan potongan multer sementara ke direktori chunk
+    const sourcePath = file.path
+      ? (path.isAbsolute(file.path) ? file.path : path.resolve(process.cwd(), file.path))
+      : path.join(process.cwd(), 'storage/uploads/gallery/.tmp', file.filename);
+
+    if (fs.existsSync(sourcePath)) {
+      UploadStorageHelper.moveFile(sourcePath, chunkPath);
+    } else {
+      throw new InternalServerErrorException('Gagal menyimpan potongan berkas sementara');
+    }
+
+    // Periksa kelengkapan semua potongan (0 sampai totalChunks - 1)
+    let allChunksExist = true;
+    for (let i = 0; i < dto.totalChunks; i++) {
+      if (!fs.existsSync(path.join(chunkDir, `${i}.part`))) {
+        allChunksExist = false;
+        break;
+      }
+    }
+
+    // Jika potongan belum lengkap, kembalikan respons sukses parsial
+    if (!allChunksExist) {
+      return {
+        success: true,
+        complete: false,
+        uploadId: sanitizedUploadId,
+        chunkIndex: dto.chunkIndex,
+        totalChunks: dto.totalChunks,
+        message: `Potongan ${dto.chunkIndex + 1}/${dto.totalChunks} berhasil diunggah`,
+      };
+    }
+
+    // SEMUA POTONGAN LENGKAP: Rakit potongan berkas secara streaming
+    const tempDir = path.join(process.cwd(), 'storage/uploads/gallery/.tmp');
+    UploadStorageHelper.ensureDirectoryExists(tempDir);
+
+    let ext = path.extname(dto.fileName).toLowerCase();
+    if (!['.jpg', '.jpeg', '.png', '.webp', '.mp4', '.webm', '.mov', '.mkv', '.avi'].includes(ext)) {
+      ext = '.bin';
+    }
+
+    const uniqueSuffix = `${Date.now()}-${randomUUID()}`;
+    const assembledFileName = `${uniqueSuffix}${ext}`;
+    const assembledFilePath = path.join(tempDir, assembledFileName);
+
+    try {
+      const writeStream = fs.createWriteStream(assembledFilePath);
+
+      for (let i = 0; i < dto.totalChunks; i++) {
+        const partPath = path.join(chunkDir, `${i}.part`);
+        await new Promise<void>((resolve, reject) => {
+          const readStream = fs.createReadStream(partPath);
+          readStream.pipe(writeStream, { end: false });
+          readStream.on('end', () => resolve());
+          readStream.on('error', (err) => reject(err));
+        });
+      }
+      writeStream.end();
+
+      // Tunggu hingga buffer selesai ditulis ke disk
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', () => resolve());
+        writeStream.on('error', (err) => reject(err));
+      });
+
+      // Bersihkan folder chunk
+      fs.rmSync(chunkDir, { recursive: true, force: true });
+
+      // Deteksi MIME type
+      let mimeType = 'application/octet-stream';
+      if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+      else if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else if (ext === '.gif') mimeType = 'image/gif';
+      else if (['.mp4', '.m4v'].includes(ext)) mimeType = 'video/mp4';
+      else if (ext === '.webm') mimeType = 'video/webm';
+      else if (ext === '.mov') mimeType = 'video/quicktime';
+      else if (ext === '.mkv') mimeType = 'video/x-matroska';
+      else if (ext === '.avi') mimeType = 'video/x-msvideo';
+
+      const stat = fs.statSync(assembledFilePath);
+
+      // Buat struktur MulterFile buatan dari file yang sudah dirakit
+      const assembledMulterFile: MulterFile = {
+        fieldname: 'files',
+        originalname: dto.fileName,
+        encoding: '7bit',
+        mimetype: mimeType,
+        size: stat.size,
+        destination: tempDir,
+        filename: assembledFileName,
+        path: assembledFilePath,
+      };
+
+      // Simpan ke storage album dan database
+      const saveResult = await this.processAndSaveFiles([assembledMulterFile], {
+        albumId: dto.albumId,
+      });
+
+      return {
+        success: true,
+        complete: true,
+        uploadId: sanitizedUploadId,
+        message: 'Berkas video/gambar berhasil digabungkan dan disimpan',
+        data: saveResult.data,
+      };
+    } catch (assemblyError) {
+      if (fs.existsSync(assembledFilePath)) {
+        fs.unlinkSync(assembledFilePath);
+      }
+      if (fs.existsSync(chunkDir)) {
+        fs.rmSync(chunkDir, { recursive: true, force: true });
+      }
+      throw new InternalServerErrorException(
+        `Gagal menggabungkan potongan berkas: ${assemblyError instanceof Error ? assemblyError.message : String(assemblyError)}`,
+      );
     }
   }
 
@@ -244,7 +393,7 @@ export class GalleryService {
           '-y',
           tempPath,
         ],
-        { timeout: 30000 },
+        { timeout: 180000 }, // 180 detik (3 menit) agar proses remux video besar tidak terputus
       );
 
       if (fs.existsSync(tempPath)) {
@@ -282,7 +431,7 @@ export class GalleryService {
         '-vf', 'scale=400:-1',
         '-y',
         thumbAbsPath,
-      ], { timeout: 15000 });
+      ], { timeout: 45000 }); // 45 detik untuk video berukuran besar
       return fs.existsSync(thumbAbsPath);
     } catch (err) {
       console.warn(`[GalleryService] Gagal ekstrak thumbnail video via ffmpeg (${videoAbsPath}):`, err);

@@ -102,3 +102,52 @@ Digunakan jika Anda ingin memindahkan sebuah foto ke album lain.
 ### 6. Hapus Satu Media Saja
 Menghapus rekaman satu media dari *Database* sekaligus menghapus permanen file fisik di server.
 *   **Endpoint**: `DELETE /gallery/:id`
+
+### 7. Unggah Berkas Bertahap (Chunked Upload)
+Digunakan untuk mengunggah berkas video/gambar berukuran besar secara bertahap dalam potongan-potongan kecil (misal: 10MB per chunk). Sangat direkomendasikan untuk arsitektur server di balik **Cloudflare Zero Trust / Cloudflare Tunnel** agar tidak terbentur batas 100MB Cloudflare Free.
+
+*   **Endpoint**: `POST /gallery/upload-chunk`
+*   **Content-Type**: `multipart/form-data`
+
+**Request Body (Form Data):**
+| Key | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `chunk` | `File/Blob` | Ya | Potongan biner berkas saat ini (Maks 25MB per chunk). |
+| `uploadId` | `String` | Ya | ID unik sesi unggah (cth: `1729080000000-a1b2c3d4`). |
+| `chunkIndex` | `Number` | Ya | Indeks potongan saat ini (0-indexed: 0, 1, 2, ...). |
+| `totalChunks` | `Number` | Ya | Total jumlah potongan berkas. |
+| `fileName` | `String` | Ya | Nama asli berkas (cth: `video-liburan.mp4`). |
+| `totalSize` | `Number` | Tidak | Total ukuran berkas asli dalam bytes. |
+| `albumId` | `UUID` | Tidak | ID Album tujuan (opsional). |
+
+**Respons Saat Potongan Belum Lengkap (201 Created):**
+```json
+{
+  "success": true,
+  "complete": false,
+  "uploadId": "1729080000000-a1b2c3d4",
+  "chunkIndex": 0,
+  "totalChunks": 5,
+  "message": "Potongan 1/5 berhasil diunggah"
+}
+```
+
+**Respons Saat Semua Potongan Selesai Dirakit (201 Created):**
+```json
+{
+  "success": true,
+  "complete": true,
+  "uploadId": "1729080000000-a1b2c3d4",
+  "message": "Berkas video/gambar berhasil digabungkan dan disimpan",
+  "data": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "fileName": "slug/gallery/album/1729080000000-uuid.mp4",
+      "originalName": "video-liburan.mp4",
+      "mimeType": "video/mp4",
+      "size": 52428800,
+      "type": "video"
+    }
+  ]
+}
+```

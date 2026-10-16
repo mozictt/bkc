@@ -8,6 +8,7 @@ import {
   Delete,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   ParseFilePipeBuilder,
   HttpStatus,
   Req,
@@ -17,10 +18,11 @@ import {
   UseGuards,
   StreamableFile,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { GalleryService } from './gallery.service';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
 import { UpdateGalleryDto } from './dto/update-gallery.dto';
+import { UploadChunkDto } from './dto/upload-chunk.dto';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import { extname } from 'path';
@@ -108,6 +110,54 @@ export class GalleryController {
       throw new UnprocessableEntityException((req as any).fileValidationError);
     }
     return this.galleryService.processAndSaveFiles(files, createGalleryDto);
+  }
+
+  @Post('upload-chunk')
+  @RequirePermission('Gallery', 'create')
+  @ApiOperation({
+    summary: 'Unggah potongan berkas (Chunked Upload) untuk mendukung file video besar melalui Cloudflare Tunnel',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        chunk: { type: 'string', format: 'binary', description: 'Potongan berkas biner (blob part)' },
+        uploadId: { type: 'string', description: 'ID unik sesi unggah berkas' },
+        chunkIndex: { type: 'number', description: 'Indeks potongan berkas (dimulai dari 0)' },
+        totalChunks: { type: 'number', description: 'Total jumlah potongan berkas' },
+        fileName: { type: 'string', description: 'Nama asli berkas yang diunggah' },
+        totalSize: { type: 'number', description: 'Ukuran total berkas asli dalam bytes' },
+        albumId: { type: 'string', format: 'uuid', description: 'ID Album opsional' },
+      },
+      required: ['chunk', 'uploadId', 'chunkIndex', 'totalChunks', 'fileName'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('chunk', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const tempPath = path.join(process.cwd(), 'storage/uploads/gallery/.tmp');
+          if (!fs.existsSync(tempPath)) {
+            fs.mkdirSync(tempPath, { recursive: true });
+          }
+          cb(null, tempPath);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = `chunk-${Date.now()}-${randomUUID()}`;
+          cb(null, `${uniqueSuffix}.part`);
+        },
+      }),
+      limits: {
+        fileSize: 25 * 1024 * 1024, // 25MB max per chunk (sangat aman di bawah batas 100MB Cloudflare)
+      },
+    }),
+  )
+  async uploadChunk(
+    @Body() uploadChunkDto: UploadChunkDto,
+    @UploadedFile() file: MulterFile,
+  ) {
+    return this.galleryService.handleChunkUpload(file, uploadChunkDto);
   }
 
   @Get('thumbnail/*path')
