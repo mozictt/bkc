@@ -97,6 +97,7 @@ export class GalleryService {
 
             if (mediaType === 'photo') {
               await sharp(targetFilePath)
+                .rotate() // Auto-orient berdasarkan metadata EXIF kamera HP sebelum resize
                 .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
                 .webp({ quality: 75 })
                 .toFile(thumbPath);
@@ -460,6 +461,7 @@ export class GalleryService {
         UploadStorageHelper.ensureDirectoryExists(path.dirname(thumbPath));
         if (isPhoto) {
           await sharp(filePath)
+            .rotate() // Auto-orient berdasarkan metadata EXIF kamera HP sebelum resize
             .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
             .webp({ quality: 75 })
             .toFile(thumbPath);

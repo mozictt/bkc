@@ -58,6 +58,7 @@ async function processDirectory(dirPath: string): Promise<{ success: number; ski
 
         if (isPhoto) {
           await sharp(fullPath)
+            .rotate() // Auto-orient berdasarkan metadata EXIF kamera HP sebelum resize
             .resize({ width: 400, height: 400, fit: 'cover', withoutEnlargement: true })
             .webp({ quality: 75 })
             .toFile(thumbPath);

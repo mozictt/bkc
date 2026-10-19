@@ -11,7 +11,7 @@ services:
       NODE_ENV: development
       REDIS_HOST: redis
       JWT_SECRET: dev_secret_untuk_local_saja_jangan_di_production
-      ALLOWED_ORIGINS: https://dlinzi.web.id,http://localhost:3000,http://localhost:3001
+      ALLOWED_ORIGINS: https://dlinzi.web.id,http://localhost:3000,http://localhost:3001,http://192.168.18.31:3000,http://192.168.18.31:4000
     # Gunakan path absolut ke nest CLI — aman meskipun volume host di-mount
     command: ["node_modules/.bin/nest", "start", "--watch"]
     volumes:
