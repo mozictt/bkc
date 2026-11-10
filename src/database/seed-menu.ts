@@ -6,6 +6,12 @@ import { Permission } from '../entities/permission.entity';
 import { Tenant } from '../entities/tenant.entity';
 import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
+import { Penduduk } from '../entities/penduduk.entity';
+import { Dokter } from '../entities/dokter.entity';
+import { Agama } from '../entities/agama.entity';
+import { Pendidikan } from '../entities/pendidikan.entity';
+import { Pekerjaan } from '../entities/pekerjaan.entity';
+import { Suku } from '../entities/suku.entity';
 import { Provinsi } from '../entities/provinsi.entity';
 import { Kabupaten } from '../entities/kabupaten.entity';
 import { Kecamatan } from '../entities/kecamatan.entity';
@@ -23,7 +29,24 @@ const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  entities: [Menu, Role, Permission, Tenant, User, Pegawai, Provinsi, Kabupaten, Kecamatan, Kelurahan],
+  entities: [
+    Menu,
+    Role,
+    Permission,
+    Tenant,
+    User,
+    Pegawai,
+    Penduduk,
+    Dokter,
+    Agama,
+    Pendidikan,
+    Pekerjaan,
+    Suku,
+    Provinsi,
+    Kabupaten,
+    Kecamatan,
+    Kelurahan,
+  ],
   synchronize: false,
   logging: true,
 });

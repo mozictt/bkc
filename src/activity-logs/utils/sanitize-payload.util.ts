@@ -14,11 +14,14 @@ const SENSITIVE_KEYS = [
   'pin',
 ];
 
+// Pencocokan key persis untuk identitas kependudukan agar kata seperti "klinik" tidak ikut tersensor
+const EXACT_SENSITIVE_KEYS = new Set(['nik', 'nokk', 'no_kk']);
+
 /**
- * Menyensor data sensitif (seperti password, token, pin) secara rekursif
+ * Menyensor data sensitif (seperti password, token, pin, nik, no_kk) secara rekursif
  * dan membatasi ukuran string panjang (seperti file base64).
  */
-export function sanitizePayload(data: any): any {
+export function sanitizePayload(data: unknown): unknown {
   if (data === null || data === undefined) {
     return data;
   }
@@ -39,13 +42,13 @@ export function sanitizePayload(data: any): any {
     return data.map((item) => sanitizePayload(item));
   }
 
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, unknown> = {};
 
-  for (const [key, value] of Object.entries(data)) {
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = SENSITIVE_KEYS.some((sensitive) =>
-      lowerKey.includes(sensitive),
-    );
+    const isSensitive =
+      EXACT_SENSITIVE_KEYS.has(lowerKey) ||
+      SENSITIVE_KEYS.some((sensitive) => lowerKey.includes(sensitive));
 
     if (isSensitive) {
       sanitized[key] = '***SENSITIVE***';
