@@ -9,6 +9,7 @@ import {
 import { TenantBaseEntity } from './tenant-base.entity';
 import type { Pasien } from './pasien.entity';
 import type { Penjamin } from './penjamin.entity';
+import type { Kelas } from './kelas.entity';
 
 @Entity('pasien_penjamin')
 @Index('idx_pasien_penjamin_tenant_pasien', ['tenantId', 'pasienId'])
@@ -49,8 +50,13 @@ export class PasienPenjamin extends TenantBaseEntity {
   @Column({ name: 'no_kartu', type: 'varchar', length: 50, nullable: true })
   noKartu: string | null;
 
-  @Column({ name: 'kelas_hak', type: 'varchar', length: 30, nullable: true })
-  kelasHak: string | null;
+  @Index()
+  @Column({ name: 'kelas_hak_id', type: 'int', nullable: true })
+  kelasHakId: number | null;
+
+  @ManyToOne('Kelas', { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'kelas_hak_id' })
+  kelasHak: Kelas | null;
 
   @Column({
     name: 'faskes_perujuk',

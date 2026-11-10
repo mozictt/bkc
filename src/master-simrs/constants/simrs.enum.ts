@@ -92,6 +92,27 @@ export enum FormatNoRm {
   DASH_6 = 'DASH_6',
 }
 
+export enum JenisUnit {
+  RAWAT_JALAN = 'RAWAT_JALAN',
+  RAWAT_INAP = 'RAWAT_INAP',
+  IGD = 'IGD',
+  INTENSIVE = 'INTENSIVE',
+  OK = 'OK',
+  FARMASI = 'FARMASI',
+  LABORATORIUM = 'LABORATORIUM',
+  RADIOLOGI = 'RADIOLOGI',
+  PENUNJANG = 'PENUNJANG',
+  LAINNYA = 'LAINNYA',
+}
+
+export enum StatusKetersediaanBed {
+  KOSONG = 'KOSONG',
+  TERISI = 'TERISI',
+  BOOKING = 'BOOKING',
+  PEMBERSIHAN = 'PEMBERSIHAN',
+  PERBAIKAN = 'PERBAIKAN',
+}
+
 export enum StatusAktifMaster {
   AKTIF = 'Y',
   NONAKTIF = 'N',

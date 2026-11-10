@@ -114,7 +114,7 @@ export class PendudukController {
 
   @Delete(':id')
   @RequirePermission('Penduduk', 'delete')
-  @ApiOperation({ summary: 'Menghapus data penduduk (Soft Delete)' })
+  @ApiOperation({ summary: 'Menghapus data penduduk' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
   @ApiResponse({ status: 200, description: 'Data penduduk berhasil dihapus.' })
   @ApiResponse({

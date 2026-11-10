@@ -38,7 +38,7 @@ describe('PegawaiService (Integrasi Penduduk & Dokter)', () => {
         name: 'Budi Santoso',
         tenantId,
       }),
-      softRemove: jest.fn(),
+      remove: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
     const userRepo = { findOne: jest.fn().mockResolvedValue(null) };

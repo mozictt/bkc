@@ -71,7 +71,7 @@ export class PendidikanService extends BaseTenantService<Pendidikan> {
   async remove(id: number) {
     const existing = await this.findOneById(id);
     try {
-      return await this.repo.softRemove(existing);
+      return await this.repo.remove(existing);
     } catch (e) {
       if (e.code === '23503')
         throw new ConflictException(

@@ -12,11 +12,12 @@ import {
   Min,
 } from 'class-validator';
 import { StatusAktifMaster } from '../../constants/simrs.enum';
+import { trimOptionalString } from '../../helpers/master-entity.helper';
 
-const trimOptionalString = ({ value }: { value: unknown }) => {
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+const optionalPositiveInt = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === null) return value;
+  if (typeof value === 'string' && value.trim() === '') return undefined;
+  return Number(value);
 };
 
 export class CreatePasienPenjaminItemDto {
@@ -42,14 +43,14 @@ export class CreatePasienPenjaminItemDto {
   noKartu?: string;
 
   @ApiPropertyOptional({
-    example: 'KELAS 1',
-    description: 'Kelas hak rawat inap',
+    example: 1,
+    description: 'ID Master Kelas hak rawat inap (FK ke tabel kelas)',
   })
   @IsOptional()
-  @Transform(trimOptionalString)
-  @IsString()
-  @MaxLength(30, { message: 'Kelas hak maksimal 30 karakter' })
-  kelasHak?: string;
+  @Transform(optionalPositiveInt)
+  @IsInt({ message: 'ID Kelas hak harus berupa angka bulat' })
+  @Min(1, { message: 'ID Kelas hak tidak valid' })
+  kelasHakId?: number;
 
   @ApiPropertyOptional({
     example: 'Puskesmas Coblong',

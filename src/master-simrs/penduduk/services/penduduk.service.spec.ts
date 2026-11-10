@@ -9,7 +9,9 @@ describe('PendudukService', () => {
   const tenantId = '11111111-1111-1111-1111-111111111111';
 
   const createService = (
-    managerOverrides: Partial<Record<'findOne' | 'create' | 'save', jest.Mock>> = {},
+    managerOverrides: Partial<
+      Record<'findOne' | 'create' | 'save', jest.Mock>
+    > = {},
   ) => {
     const manager = {
       findOne: jest.fn().mockResolvedValue(null),
@@ -38,7 +40,7 @@ describe('PendudukService', () => {
     const repo = {
       createQueryBuilder: jest.fn(() => qb),
       findOneBy: jest.fn(),
-      softRemove: jest.fn(),
+      remove: jest.fn(),
     };
 
     const dataSource = { manager };
@@ -118,9 +120,10 @@ describe('PendudukService', () => {
       namaLengkap: 'Budi Santoso',
       tenantId,
     });
-    repo.softRemove.mockRejectedValue({ code: '23503' });
+    repo.remove.mockRejectedValue({ code: '23503' });
 
     await expect(service.remove(10)).rejects.toThrow(ConflictException);
+    expect(repo.remove).toHaveBeenCalledTimes(1);
   });
 
   it('dapat dipanggil dalam transaksi luar melalui createInTransaction', async () => {

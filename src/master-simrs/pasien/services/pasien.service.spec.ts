@@ -4,6 +4,7 @@ import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { Pasien } from '@entities/pasien.entity';
 import { PasienPenjamin } from '@entities/pasien-penjamin.entity';
 import { Penjamin } from '@entities/penjamin.entity';
+import { Kelas } from '@entities/kelas.entity';
 import { Penduduk } from '@entities/penduduk.entity';
 import { PendudukService } from '../../penduduk/services/penduduk.service';
 import {
@@ -57,11 +58,17 @@ describe('PasienService', () => {
           {
             id: 200,
             penjaminId: 1,
+            kelasHakId: 3,
             penjamin: {
               id: 1,
               kode: 'BPJS',
               nama: 'BPJS Kesehatan',
               jenisPenjamin: JenisPenjamin.BPJS,
+            },
+            kelasHak: {
+              id: 3,
+              kode: 'KL1',
+              nama: 'Kelas 1',
             },
             isUtama: true,
           },
@@ -76,14 +83,16 @@ describe('PasienService', () => {
         noRm: '00000001',
         tenantId,
       }),
-      softRemove: jest.fn(),
+      remove: jest.fn(),
     };
     const penjaminRepo = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue({
         id: 200,
         penjaminId: 2,
+        kelasHakId: 2,
         penjamin: { id: 2, kode: 'PRU', nama: 'Prudential' },
+        kelasHak: { id: 2, kode: 'VIP', nama: 'VIP' },
       }),
       softRemove: jest.fn(),
     };
@@ -128,7 +137,7 @@ describe('PasienService', () => {
     expect(formatNoRmSequence(123456, FormatNoRm.DASH_6)).toBe('12-34-56');
   });
 
-  it('berhasil mendaftarkan pasien bayi baru lahir tanpa NIK dengan auto-generate No. RM & multi penjamin FK master dalam 1 transaksi', async () => {
+  it('berhasil mendaftarkan pasien bayi baru lahir dengan auto-generate No. RM & multi penjamin FK penjamin + FK kelas dalam 1 transaksi', async () => {
     const { service, manager, pendudukService } = createService();
 
     manager.findOne.mockImplementation((entity: unknown) => {
@@ -156,6 +165,12 @@ describe('PasienService', () => {
           },
         ]);
       }
+      if (entity === Kelas) {
+        return Promise.resolve([
+          { id: 3, kode: 'KL1', nama: 'Kelas 1', status: 'Y' },
+          { id: 2, kode: 'VIP', nama: 'VIP', status: 'Y' },
+        ]);
+      }
       return Promise.resolve([]);
     });
 
@@ -171,16 +186,18 @@ describe('PasienService', () => {
         {
           penjaminId: 1,
           noKartu: '0001234567890',
+          kelasHakId: 3,
         },
         {
           penjaminId: 2,
           noKartu: 'PRU-9988',
+          kelasHakId: 2,
         },
       ],
     });
 
     expect(pendudukService.createInTransaction).toHaveBeenCalledTimes(1);
-    expect(manager.find).toHaveBeenCalledTimes(1); // Batch lookup penjamin anti-N+1
+    expect(manager.find).toHaveBeenCalledTimes(2); // 1 batch query Penjamin + 1 batch query Kelas (anti-N+1)
     expect(manager.save).toHaveBeenCalledWith(
       Pasien,
       expect.objectContaining({
@@ -196,17 +213,54 @@ describe('PasienService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           penjaminId: 1,
+          kelasHakId: 3,
           isUtama: true,
           pasienId: 100,
         }),
         expect.objectContaining({
           penjaminId: 2,
+          kelasHakId: 2,
           isUtama: false,
           pasienId: 100,
         }),
       ]),
     );
     expect(result.penjaminUtama?.penjaminId).toBe(1);
+    expect(result.penjaminUtama?.kelasHakId).toBe(3);
+  });
+
+  it('menolak jika kelasHakId pada penjamin pasien tidak ditemukan di master kelas', async () => {
+    const { service, manager } = createService();
+    manager.findOne.mockImplementation((entity: unknown) => {
+      if (entity === Penduduk) {
+        return Promise.resolve({ id: 10, namaLengkap: 'Budi' });
+      }
+      return Promise.resolve(null);
+    });
+    manager.find.mockImplementation((entity: unknown) => {
+      if (entity === Penjamin) {
+        return Promise.resolve([
+          {
+            id: 1,
+            kode: 'BPJS',
+            nama: 'BPJS Kesehatan',
+            butuhNoKartu: true,
+            status: 'Y',
+          },
+        ]);
+      }
+      if (entity === Kelas) {
+        return Promise.resolve([]); // Kelas ID tidak ada
+      }
+      return Promise.resolve([]);
+    });
+
+    await expect(
+      service.create({
+        pendudukId: 10,
+        penjaminList: [{ penjaminId: 1, noKartu: '000123', kelasHakId: 999 }],
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('menolak jika penjamin wajib nomor kartu (butuhNoKartu = true) namun noKartu kosong', async () => {
@@ -278,22 +332,33 @@ describe('PasienService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  it('mereset penjamin utama lama ketika menambah penjamin baru dengan isUtama = true', async () => {
+  it('mereset penjamin utama lama ketika menambah penjamin baru dengan isUtama = true dan kelasHakId valid', async () => {
     const { service, manager } = createService();
     manager.findOne.mockResolvedValue(null);
-    manager.find.mockResolvedValue([
-      {
-        id: 2,
-        kode: 'ALZ',
-        nama: 'Allianz',
-        butuhNoKartu: true,
-        status: 'Y',
-      },
-    ]);
+    manager.find.mockImplementation((entity: unknown) => {
+      if (entity === Penjamin) {
+        return Promise.resolve([
+          {
+            id: 2,
+            kode: 'ALZ',
+            nama: 'Allianz',
+            butuhNoKartu: true,
+            status: 'Y',
+          },
+        ]);
+      }
+      if (entity === Kelas) {
+        return Promise.resolve([
+          { id: 2, kode: 'VIP', nama: 'VIP', status: 'Y' },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
 
     const added = await service.addPenjamin(100, {
       penjaminId: 2,
       noKartu: 'ALZ-001',
+      kelasHakId: 2,
       isUtama: true,
     });
 
@@ -303,5 +368,6 @@ describe('PasienService', () => {
       { isUtama: false },
     );
     expect(added?.penjaminId).toBe(2);
+    expect(added?.kelasHakId).toBe(2);
   });
 });

@@ -215,7 +215,6 @@ export class DokterService extends BaseTenantService<Dokter> {
         .select('1')
         .from('dokter', 'd')
         .where('d.pegawai_id = pegawai.id')
-        .andWhere('d.deleted_at IS NULL')
         .getQuery();
       return `NOT EXISTS ${subQuery}`;
     });
@@ -252,7 +251,6 @@ export class DokterService extends BaseTenantService<Dokter> {
         .select('1')
         .from('dokter', 'd')
         .where('d.penduduk_id = penduduk.id')
-        .andWhere('d.deleted_at IS NULL')
         .getQuery();
       return `NOT EXISTS ${subQuery}`;
     });
@@ -393,7 +391,7 @@ export class DokterService extends BaseTenantService<Dokter> {
   async remove(id: number) {
     const existing = await this.findOneById(id);
     try {
-      await this.repo.softRemove(existing);
+      await this.repo.remove(existing);
       return {
         message: `Data dokter "${existing.kodeDokter}" berhasil dihapus.`,
       };

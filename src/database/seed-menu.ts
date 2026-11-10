@@ -12,6 +12,9 @@ import { Pasien } from '../entities/pasien.entity';
 import { PasienPenjamin } from '../entities/pasien-penjamin.entity';
 import { Penjamin } from '../entities/penjamin.entity';
 import { TenantCounter } from '../entities/tenant-counter.entity';
+import { Kelas } from '../entities/kelas.entity';
+import { Unit } from '../entities/unit.entity';
+import { Bed } from '../entities/bed.entity';
 import { Agama } from '../entities/agama.entity';
 import { Pendidikan } from '../entities/pendidikan.entity';
 import { Pekerjaan } from '../entities/pekerjaan.entity';
@@ -46,6 +49,9 @@ const AppDataSource = new DataSource({
     PasienPenjamin,
     Penjamin,
     TenantCounter,
+    Kelas,
+    Unit,
+    Bed,
     Agama,
     Pendidikan,
     Pekerjaan,

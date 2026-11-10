@@ -6,28 +6,24 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { TenantBaseEntity } from './tenant-base.entity';
+import { TenantNoSoftDeleteBaseEntity } from './tenant-base.entity';
 import type { Penduduk } from './penduduk.entity';
 import type { Pegawai } from './pegawai.entity';
 
 @Entity('dokter')
-@Index('uq_dokter_tenant_kode', ['tenantId', 'kodeDokter'], {
-  unique: true,
-  where: '"deleted_at" IS NULL',
-})
+@Index('uq_dokter_tenant_kode', ['tenantId', 'kodeDokter'], { unique: true })
 @Index('uq_dokter_tenant_penduduk', ['tenantId', 'pendudukId'], {
   unique: true,
-  where: '"deleted_at" IS NULL',
 })
 @Index('uq_dokter_tenant_pegawai', ['tenantId', 'pegawaiId'], {
   unique: true,
-  where: '"deleted_at" IS NULL AND "pegawai_id" IS NOT NULL',
+  where: '"pegawai_id" IS NOT NULL',
 })
 @Index('uq_dokter_tenant_str', ['tenantId', 'noStr'], {
   unique: true,
-  where: '"deleted_at" IS NULL AND "no_str" IS NOT NULL',
+  where: '"no_str" IS NOT NULL',
 })
-export class Dokter extends TenantBaseEntity {
+export class Dokter extends TenantNoSoftDeleteBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 

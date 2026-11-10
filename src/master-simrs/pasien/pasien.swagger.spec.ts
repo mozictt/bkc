@@ -11,7 +11,7 @@ import { PasienService } from './services/pasien.service';
 import { CreatePasienDto } from './dto/create-pasien.dto';
 
 describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () => {
-  it('menghasilkan dokumen Swagger OpenAPI JSON lengkap untuk endpoint & schema Pasien + Penjamin', async () => {
+  it('menghasilkan dokumen Swagger OpenAPI JSON lengkap untuk endpoint & schema Pasien + Penjamin (termasuk kelasHakId)', async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [PasienController, PenjaminController],
       providers: [
@@ -48,18 +48,23 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
       document.paths['/master/pasien/{id}/penjamin/{penjaminId}'],
     ).toBeDefined();
 
-    const schemas = document.components?.schemas ?? {};
+    const schemas = document.components?.schemas as Record<
+      string,
+      { properties?: Record<string, unknown> }
+    >;
     expect(schemas.CreatePenjaminDto).toBeDefined();
     expect(schemas.UpdatePenjaminDto).toBeDefined();
     expect(schemas.CreatePasienDto).toBeDefined();
     expect(schemas.UpdatePasienDto).toBeDefined();
-    expect(schemas.CreatePasienPenjaminItemDto).toBeDefined();
+    expect(
+      schemas.CreatePasienPenjaminItemDto?.properties?.kelasHakId,
+    ).toBeDefined();
     expect(schemas.UpdatePasienPenjaminItemDto).toBeDefined();
 
     await app.close();
   });
 
-  it('menormalisasi string kosong nik menjadi undefined pada pasien bayi baru lahir dan memvalidasi nested penjaminList dengan penjaminId', async () => {
+  it('menormalisasi string kosong nik & kelasHakId serta memvalidasi nested penjaminList', async () => {
     const pipe = new ValidationPipe({
       whitelist: true,
       transform: true,
@@ -77,7 +82,13 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
           {
             penjaminId: 1,
             noKartu: ' 0001234567890 ',
+            kelasHakId: '',
             isUtama: true,
+          },
+          {
+            penjaminId: 2,
+            noKartu: 'PRU-001',
+            kelasHakId: '3',
           },
         ],
       },
@@ -88,5 +99,7 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
     expect(validBaby.penduduk?.namaLengkap).toBe('By. Ny. Ani');
     expect(validBaby.penjaminList?.[0].penjaminId).toBe(1);
     expect(validBaby.penjaminList?.[0].noKartu).toBe('0001234567890');
+    expect(validBaby.penjaminList?.[0].kelasHakId).toBeUndefined();
+    expect(validBaby.penjaminList?.[1].kelasHakId).toBe(3);
   });
 });

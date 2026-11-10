@@ -176,7 +176,7 @@ export class PendudukService extends BaseTenantService<Penduduk> {
   async remove(id: number) {
     const existing = await this.findOneById(id);
     try {
-      await this.repo.softRemove(existing);
+      await this.repo.remove(existing);
       return {
         message: `Data penduduk "${existing.namaLengkap}" berhasil dihapus.`,
       };

@@ -70,7 +70,10 @@ export class PegawaiController {
   @RequirePermission('Pegawai', 'update')
   @ApiOperation({ summary: 'Memperbarui data Pegawai' })
   @ApiBody({ type: UpdatePegawaiDto })
-  @ApiResponse({ status: 200, description: 'Data pegawai berhasil diperbarui.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Data pegawai berhasil diperbarui.',
+  })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePegawaiDto: UpdatePegawaiDto,
@@ -80,7 +83,7 @@ export class PegawaiController {
 
   @Delete(':id')
   @RequirePermission('Pegawai', 'delete')
-  @ApiOperation({ summary: 'Menghapus data Pegawai (Soft Delete)' })
+  @ApiOperation({ summary: 'Menghapus data Pegawai' })
   @ApiResponse({ status: 200, description: 'Pegawai berhasil dihapus.' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.pegawaiService.remove(id);

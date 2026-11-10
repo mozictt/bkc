@@ -54,6 +54,16 @@ export class QueryPasienDto {
   jenisPenjamin?: JenisPenjamin;
 
   @ApiPropertyOptional({
+    example: 3,
+    description: 'Filter pasien berdasarkan ID Kelas hak penjamin',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  kelasHakId?: number;
+
+  @ApiPropertyOptional({
     description: 'Filter pasien bayi baru lahir (true/false)',
   })
   @IsOptional()

@@ -134,7 +134,7 @@ export class PasienController {
 
   @Delete(':id')
   @RequirePermission('Pasien', 'delete')
-  @ApiOperation({ summary: 'Menghapus data master pasien (Soft Delete)' })
+  @ApiOperation({ summary: 'Menghapus data master pasien' })
   @ApiParam({ name: 'id', type: Number, example: 1 })
   @ApiResponse({ status: 200, description: 'Data pasien berhasil dihapus.' })
   @ApiResponse({

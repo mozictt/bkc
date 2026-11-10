@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-import { TenantBaseEntity } from './tenant-base.entity';
+import { TenantNoSoftDeleteBaseEntity } from './tenant-base.entity';
 
 @Entity('agama')
-export class Agama extends TenantBaseEntity {
+export class Agama extends TenantNoSoftDeleteBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -12,4 +12,3 @@ export class Agama extends TenantBaseEntity {
   @Column({ default: 'Y' })
   status: string;
 }
-

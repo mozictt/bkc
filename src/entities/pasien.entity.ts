@@ -7,21 +7,17 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { TenantBaseEntity } from './tenant-base.entity';
+import { TenantNoSoftDeleteBaseEntity } from './tenant-base.entity';
 import type { Penduduk } from './penduduk.entity';
 import type { Kelurahan } from './kelurahan.entity';
 import type { PasienPenjamin } from './pasien-penjamin.entity';
 
 @Entity('pasien')
-@Index('uq_pasien_tenant_norm', ['tenantId', 'noRm'], {
-  unique: true,
-  where: '"deleted_at" IS NULL',
-})
+@Index('uq_pasien_tenant_norm', ['tenantId', 'noRm'], { unique: true })
 @Index('uq_pasien_tenant_penduduk', ['tenantId', 'pendudukId'], {
   unique: true,
-  where: '"deleted_at" IS NULL',
 })
-export class Pasien extends TenantBaseEntity {
+export class Pasien extends TenantNoSoftDeleteBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -100,4 +96,3 @@ export class Pasien extends TenantBaseEntity {
   @OneToMany('PasienPenjamin', 'pasien')
   penjaminList: PasienPenjamin[];
 }
-

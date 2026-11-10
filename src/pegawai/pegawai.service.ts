@@ -222,11 +222,20 @@ export class PegawaiService {
       );
     }
 
-    await this.pegawaiRepo.softRemove(pegawai);
-    return {
-      success: true,
-      message: `Pegawai dengan NIP ${pegawai.nip} (${pegawai.name}) berhasil dihapus.`,
-    };
+    try {
+      await this.pegawaiRepo.remove(pegawai);
+      return {
+        success: true,
+        message: `Pegawai dengan NIP ${pegawai.nip} (${pegawai.name}) berhasil dihapus.`,
+      };
+    } catch (error: unknown) {
+      if (getPostgresErrorCode(error) === '23503') {
+        throw new ConflictException(
+          'Pegawai tidak dapat dihapus karena masih direferensikan oleh data pengguna, dokter, atau transaksi lain.',
+        );
+      }
+      throw error;
+    }
   }
 
   /**

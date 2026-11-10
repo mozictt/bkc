@@ -42,7 +42,7 @@ describe('DokterService', () => {
     const repo = {
       createQueryBuilder: jest.fn(() => detailQb),
       findOneBy: jest.fn(),
-      softRemove: jest.fn(),
+      remove: jest.fn(),
     };
     const pegawaiRepo = { createQueryBuilder: jest.fn() };
     const pendudukRepo = { createQueryBuilder: jest.fn() };

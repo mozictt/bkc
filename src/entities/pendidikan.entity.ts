@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-import { TenantBaseEntity } from './tenant-base.entity';
+import { TenantNoSoftDeleteBaseEntity } from './tenant-base.entity';
 
 @Entity('pendidikan')
-export class Pendidikan extends TenantBaseEntity {
+export class Pendidikan extends TenantNoSoftDeleteBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -12,4 +12,3 @@ export class Pendidikan extends TenantBaseEntity {
   @Column({ default: 'Y' })
   status: string;
 }
-

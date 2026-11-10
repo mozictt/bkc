@@ -11,11 +11,13 @@ import {
   In,
   IsNull,
   Not,
+  ObjectLiteral,
   Repository,
 } from 'typeorm';
 import { Pasien } from '@entities/pasien.entity';
 import { PasienPenjamin } from '@entities/pasien-penjamin.entity';
 import { Penjamin } from '@entities/penjamin.entity';
+import { Kelas } from '@entities/kelas.entity';
 import { Penduduk } from '@entities/penduduk.entity';
 import { Kelurahan } from '@entities/kelurahan.entity';
 import { Tenant } from '@entities/tenant.entity';
@@ -62,6 +64,7 @@ export class PasienService extends BaseTenantService<Pasien> {
       search,
       penjaminId,
       jenisPenjamin,
+      kelasHakId,
       isBayiBaruLahir,
       status,
       sortBy = 'id',
@@ -120,6 +123,13 @@ export class PasienService extends BaseTenantService<Pasien> {
       qb.andWhere(
         'EXISTS (SELECT 1 FROM pasien_penjamin ppf INNER JOIN penjamin pj ON pj.id = ppf.penjamin_id WHERE ppf.pasien_id = pasien.id AND ppf.deleted_at IS NULL AND pj.deleted_at IS NULL AND pj.jenis_penjamin = :jenisPenjamin)',
         { jenisPenjamin },
+      );
+    }
+
+    if (kelasHakId) {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM pasien_penjamin ppk WHERE ppk.pasien_id = pasien.id AND ppk.deleted_at IS NULL AND ppk.kelas_hak_id = :kelasHakId)',
+        { kelasHakId },
       );
     }
 
@@ -258,11 +268,29 @@ export class PasienService extends BaseTenantService<Pasien> {
       );
 
       if (penjaminList && penjaminList.length > 0) {
-        const penjaminMap = await this.resolveAndValidatePenjaminMap(
-          manager,
-          tenantId,
-          penjaminList.map((item) => item.penjaminId),
-        );
+        const kelasIds = penjaminList
+          .map((item) => item.kelasHakId)
+          .filter((id): id is number => id !== undefined && id !== null);
+
+        const [penjaminMap] = await Promise.all([
+          this.resolveAndValidateMasterMap(
+            manager,
+            Penjamin,
+            tenantId,
+            penjaminList.map((item) => item.penjaminId),
+            'Master Penjamin',
+          ),
+          kelasIds.length > 0
+            ? this.resolveAndValidateMasterMap(
+                manager,
+                Kelas,
+                tenantId,
+                kelasIds,
+                'Master Kelas',
+              )
+            : Promise.resolve(new Map<number, Kelas>()),
+        ]);
+
         const penjaminEntities = this.buildPenjaminEntities(
           manager,
           savedPasien.id,
@@ -334,7 +362,7 @@ export class PasienService extends BaseTenantService<Pasien> {
   async remove(id: number) {
     const existing = await this.findOneById(id);
     try {
-      await this.repo.softRemove(existing);
+      await this.repo.remove(existing);
       return {
         message: `Data pasien dengan No. RM "${existing.noRm}" berhasil dihapus.`,
       };
@@ -352,7 +380,7 @@ export class PasienService extends BaseTenantService<Pasien> {
     await this.findOneById(pasienId);
     return this.penjaminRepo.find({
       where: { pasienId, tenantId: this.tenantId },
-      relations: ['penjamin'],
+      relations: ['penjamin', 'kelasHak'],
       order: { isUtama: 'DESC', id: 'ASC' },
     });
   }
@@ -362,11 +390,24 @@ export class PasienService extends BaseTenantService<Pasien> {
     await this.findOneById(pasienId);
 
     const savedId = await this.dataSource.transaction(async (manager) => {
-      const penjaminMap = await this.resolveAndValidatePenjaminMap(
-        manager,
-        tenantId,
-        [dto.penjaminId],
-      );
+      const [penjaminMap] = await Promise.all([
+        this.resolveAndValidateMasterMap(
+          manager,
+          Penjamin,
+          tenantId,
+          [dto.penjaminId],
+          'Master Penjamin',
+        ),
+        dto.kelasHakId !== undefined && dto.kelasHakId !== null
+          ? this.resolveAndValidateMasterMap(
+              manager,
+              Kelas,
+              tenantId,
+              [dto.kelasHakId],
+              'Master Kelas',
+            )
+          : Promise.resolve(new Map<number, Kelas>()),
+      ]);
       const masterPenjamin = penjaminMap.get(dto.penjaminId)!;
       this.assertPenjaminCardRequirement(masterPenjamin, dto.noKartu);
 
@@ -400,7 +441,7 @@ export class PasienService extends BaseTenantService<Pasien> {
 
     return this.penjaminRepo.findOne({
       where: { id: savedId, tenantId },
-      relations: ['penjamin'],
+      relations: ['penjamin', 'kelasHak'],
     });
   }
 
@@ -426,11 +467,24 @@ export class PasienService extends BaseTenantService<Pasien> {
       const nextNoKartu =
         dto.noKartu !== undefined ? dto.noKartu : existing.noKartu;
 
-      const penjaminMap = await this.resolveAndValidatePenjaminMap(
-        manager,
-        tenantId,
-        [nextPenjaminMasterId],
-      );
+      const [penjaminMap] = await Promise.all([
+        this.resolveAndValidateMasterMap(
+          manager,
+          Penjamin,
+          tenantId,
+          [nextPenjaminMasterId],
+          'Master Penjamin',
+        ),
+        dto.kelasHakId !== undefined && dto.kelasHakId !== null
+          ? this.resolveAndValidateMasterMap(
+              manager,
+              Kelas,
+              tenantId,
+              [dto.kelasHakId],
+              'Master Kelas',
+            )
+          : Promise.resolve(new Map<number, Kelas>()),
+      ]);
       const masterPenjamin = penjaminMap.get(nextPenjaminMasterId)!;
       this.assertPenjaminCardRequirement(masterPenjamin, nextNoKartu);
 
@@ -457,7 +511,7 @@ export class PasienService extends BaseTenantService<Pasien> {
 
     return this.penjaminRepo.findOne({
       where: { id: penjaminId, pasienId, tenantId },
-      relations: ['penjamin'],
+      relations: ['penjamin', 'kelasHak'],
     });
   }
 
@@ -552,6 +606,7 @@ export class PasienService extends BaseTenantService<Pasien> {
       .leftJoinAndSelect('kabupatenDomisili.provinsi', 'provinsiDomisili')
       .leftJoinAndSelect('pasien.penjaminList', 'penjaminList')
       .leftJoinAndSelect('penjaminList.penjamin', 'penjaminMaster')
+      .leftJoinAndSelect('penjaminList.kelasHak', 'kelasHakMaster')
       .andWhere(whereClause, params)
       .orderBy('penjaminList.isUtama', 'DESC')
       .addOrderBy('penjaminList.id', 'ASC')
@@ -581,7 +636,7 @@ export class PasienService extends BaseTenantService<Pasien> {
         pasienId: In(pasienIds),
         tenantId: this.tenantId,
       },
-      relations: ['penjamin'],
+      relations: ['penjamin', 'kelasHak'],
       order: { isUtama: 'DESC', id: 'ASC' },
     });
 
@@ -728,41 +783,50 @@ export class PasienService extends BaseTenantService<Pasien> {
   }
 
   /**
-   * Batch lookup master Penjamin (menghindari N+1 query saat pasien didaftarkan dengan banyak penjamin).
+   * Batch lookup master entity (Penjamin, Kelas) agar validasi banyak item tetap 1 query tanpa N+1.
    */
-  private async resolveAndValidatePenjaminMap(
+  private async resolveAndValidateMasterMap<
+    T extends ObjectLiteral & {
+      id: number;
+      nama: string;
+      status: string;
+      tenantId: string | null;
+    },
+  >(
     manager: EntityManager,
+    entityClass: new () => T,
     tenantId: string,
-    penjaminIds: number[],
-  ): Promise<Map<number, Penjamin>> {
-    const uniqueIds = Array.from(new Set(penjaminIds));
-    const foundRows = await manager.find(Penjamin, {
+    ids: number[],
+    label: string,
+  ): Promise<Map<number, T>> {
+    const uniqueIds = Array.from(new Set(ids));
+    const foundRows = await manager.find(entityClass, {
       where: [
         { id: In(uniqueIds), tenantId },
         { id: In(uniqueIds), tenantId: IsNull() },
-      ],
+      ] as never,
     });
 
-    const penjaminMap = new Map<number, Penjamin>();
+    const masterMap = new Map<number, T>();
     for (const row of foundRows) {
-      penjaminMap.set(row.id, row);
+      masterMap.set(row.id, row);
     }
 
     for (const id of uniqueIds) {
-      const master = penjaminMap.get(id);
+      const master = masterMap.get(id);
       if (!master) {
         throw new BadRequestException(
-          `Master Penjamin dengan ID #${id} tidak ditemukan.`,
+          `${label} dengan ID #${id} tidak ditemukan.`,
         );
       }
       if (master.status !== 'Y') {
         throw new BadRequestException(
-          `Master Penjamin "${master.nama}" sedang nonaktif.`,
+          `${label} "${master.nama}" sedang nonaktif.`,
         );
       }
     }
 
-    return penjaminMap;
+    return masterMap;
   }
 
   private assertPenjaminCardRequirement(
