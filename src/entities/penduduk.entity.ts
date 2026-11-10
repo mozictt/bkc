@@ -18,12 +18,36 @@ import type { Suku } from './suku.entity';
   unique: true,
   where: '"deleted_at" IS NULL AND "nik" IS NOT NULL',
 })
+@Index(
+  'uq_penduduk_tenant_identitas_lain',
+  ['tenantId', 'jenisIdentitas', 'noIdentitasLain'],
+  {
+    unique: true,
+    where: '"deleted_at" IS NULL AND "no_identitas_lain" IS NOT NULL',
+  },
+)
 export class Penduduk extends TenantBaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({
+    name: 'jenis_identitas',
+    type: 'varchar',
+    length: 30,
+    default: 'KTP',
+  })
+  jenisIdentitas: string;
+
   @Column({ type: 'varchar', length: 16, nullable: true })
   nik: string | null;
+
+  @Column({
+    name: 'no_identitas_lain',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  noIdentitasLain: string | null;
 
   @Column({ name: 'no_kk', type: 'varchar', length: 16, nullable: true })
   noKk: string | null;
@@ -31,6 +55,14 @@ export class Penduduk extends TenantBaseEntity {
   @Index()
   @Column({ name: 'nama_lengkap', type: 'varchar', length: 150 })
   namaLengkap: string;
+
+  @Column({
+    name: 'nama_ibu_kandung',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+  })
+  namaIbuKandung: string | null;
 
   @Column({
     name: 'tempat_lahir',
@@ -67,6 +99,17 @@ export class Penduduk extends TenantBaseEntity {
 
   @Column({ type: 'varchar', length: 10, default: 'WNI' })
   kewarganegaraan: string;
+
+  @Column({
+    name: 'status_hidup',
+    type: 'varchar',
+    length: 20,
+    default: 'HIDUP',
+  })
+  statusHidup: string;
+
+  @Column({ name: 'tanggal_meninggal', type: 'date', nullable: true })
+  tanggalMeninggal: string | null;
 
   @Column({ name: 'alamat_ktp', type: 'text', nullable: true })
   alamatKtp: string | null;

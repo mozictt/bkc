@@ -3,6 +3,20 @@ export enum JenisKelamin {
   PEREMPUAN = 'P',
 }
 
+export enum JenisIdentitas {
+  KTP = 'KTP',
+  PASPOR = 'PASPOR',
+  KITAS = 'KITAS',
+  KITAP = 'KITAP',
+  KIA = 'KIA',
+  TANPA_IDENTITAS = 'TANPA_IDENTITAS',
+}
+
+export enum StatusHidup {
+  HIDUP = 'HIDUP',
+  MENINGGAL = 'MENINGGAL',
+}
+
 export enum GolonganDarah {
   A = 'A',
   B = 'B',
@@ -54,8 +68,31 @@ export enum JenisDokter {
   GIGI_SPESIALIS = 'GIGI_SPESIALIS',
 }
 
+export enum JenisPenjamin {
+  UMUM = 'UMUM',
+  BPJS = 'BPJS',
+  ASURANSI_SWASTA = 'ASURANSI_SWASTA',
+  PERUSAHAAN = 'PERUSAHAAN',
+  KEMENKES = 'KEMENKES',
+  LAINNYA = 'LAINNYA',
+}
+
+export enum HubunganPenanggungJawab {
+  DIRI_SENDIRI = 'DIRI_SENDIRI',
+  PASANGAN = 'PASANGAN',
+  ORANG_TUA = 'ORANG_TUA',
+  ANAK = 'ANAK',
+  SAUDARA = 'SAUDARA',
+  KERABAT = 'KERABAT',
+  LAINNYA = 'LAINNYA',
+}
+
+export enum FormatNoRm {
+  PLAIN_8 = 'PLAIN_8',
+  DASH_6 = 'DASH_6',
+}
+
 export enum StatusAktifMaster {
   AKTIF = 'Y',
   NONAKTIF = 'N',
 }
-

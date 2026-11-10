@@ -14,8 +14,20 @@ const SENSITIVE_KEYS = [
   'pin',
 ];
 
-// Pencocokan key persis untuk identitas kependudukan agar kata seperti "klinik" tidak ikut tersensor
-const EXACT_SENSITIVE_KEYS = new Set(['nik', 'nokk', 'no_kk']);
+// Pencocokan key persis untuk identitas kependudukan & asuransi agar kata seperti "klinik" tidak ikut tersensor
+const EXACT_SENSITIVE_KEYS = new Set([
+  'nik',
+  'nokk',
+  'no_kk',
+  'nobpjs',
+  'no_bpjs',
+  'nokartu',
+  'no_kartu',
+  'nopaspor',
+  'no_paspor',
+  'noidentitaslain',
+  'no_identitas_lain',
+]);
 
 /**
  * Menyensor data sensitif (seperti password, token, pin, nik, no_kk) secara rekursif

@@ -47,11 +47,15 @@ export class PendudukService extends BaseTenantService<Penduduk> {
       .leftJoin('penduduk.kelurahan', 'kelurahan')
       .select([
         'penduduk.id',
+        'penduduk.jenisIdentitas',
         'penduduk.nik',
+        'penduduk.noIdentitasLain',
         'penduduk.namaLengkap',
+        'penduduk.namaIbuKandung',
         'penduduk.tempatLahir',
         'penduduk.tanggalLahir',
         'penduduk.jenisKelamin',
+        'penduduk.statusHidup',
         'penduduk.noTelepon',
         'penduduk.alamatKtp',
         'penduduk.idKelurahan',
@@ -66,7 +70,7 @@ export class PendudukService extends BaseTenantService<Penduduk> {
 
     if (search) {
       qb.andWhere(
-        '(UPPER(penduduk.namaLengkap) LIKE :search OR penduduk.nik LIKE :nikSearch)',
+        '(UPPER(penduduk.namaLengkap) LIKE :search OR penduduk.nik LIKE :nikSearch OR UPPER(penduduk.noIdentitasLain) LIKE :search)',
         {
           search: `%${search.trim().toUpperCase()}%`,
           nikSearch: `%${search.trim()}%`,
@@ -179,7 +183,7 @@ export class PendudukService extends BaseTenantService<Penduduk> {
     } catch (error: unknown) {
       if (getPostgresErrorCode(error) === '23503') {
         throw new ConflictException(
-          'Data penduduk tidak dapat dihapus karena masih digunakan oleh data pegawai atau dokter.',
+          'Data penduduk tidak dapat dihapus karena masih digunakan oleh data pegawai, dokter, atau pasien.',
         );
       }
       throw error;
@@ -221,7 +225,7 @@ export class PendudukService extends BaseTenantService<Penduduk> {
       throw new NotFoundException(`Penduduk dengan ID #${id} tidak ditemukan.`);
     }
 
-    await this.validatePendudukInput(manager, tenantId, dto, id);
+    await this.validatePendudukInput(manager, tenantId, dto, id, existing);
     Object.assign(existing, dto);
 
     return this.saveWithConstraintHandling(manager, existing);
@@ -232,14 +236,38 @@ export class PendudukService extends BaseTenantService<Penduduk> {
     tenantId: string,
     dto: Partial<CreatePendudukDto>,
     excludeId?: number,
+    existingPenduduk?: Penduduk,
   ): Promise<void> {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    const effectiveBirth =
+      dto.tanggalLahir ?? existingPenduduk?.tanggalLahir ?? null;
+    const effectiveDeath =
+      dto.tanggalMeninggal ?? existingPenduduk?.tanggalMeninggal ?? null;
+
     if (dto.tanggalLahir) {
       const birthDate = new Date(dto.tanggalLahir);
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
       if (Number.isNaN(birthDate.getTime()) || birthDate > today) {
         throw new BadRequestException(
           'Tanggal lahir tidak valid atau tidak boleh melebihi tanggal hari ini.',
+        );
+      }
+    }
+
+    if (dto.tanggalMeninggal) {
+      const deathDate = new Date(dto.tanggalMeninggal);
+      if (Number.isNaN(deathDate.getTime()) || deathDate > today) {
+        throw new BadRequestException(
+          'Tanggal meninggal tidak valid atau tidak boleh melebihi tanggal hari ini.',
+        );
+      }
+    }
+
+    if (effectiveBirth && effectiveDeath) {
+      if (new Date(effectiveDeath) < new Date(effectiveBirth)) {
+        throw new BadRequestException(
+          'Tanggal meninggal tidak boleh lebih awal dari tanggal lahir.',
         );
       }
     }
@@ -256,6 +284,25 @@ export class PendudukService extends BaseTenantService<Penduduk> {
       if (existingNik) {
         throw new ConflictException(
           `Penduduk dengan NIK "${dto.nik}" sudah terdaftar (ID #${existingNik.id}).`,
+        );
+      }
+    }
+
+    if (dto.noIdentitasLain) {
+      const jenisIdentitas =
+        dto.jenisIdentitas ?? existingPenduduk?.jenisIdentitas ?? 'KTP';
+      const existingAlt = await manager.findOne(Penduduk, {
+        where: {
+          jenisIdentitas,
+          noIdentitasLain: dto.noIdentitasLain,
+          tenantId,
+          ...(excludeId ? { id: Not(excludeId) } : {}),
+        },
+        select: ['id'],
+      });
+      if (existingAlt) {
+        throw new ConflictException(
+          `Penduduk dengan ${jenisIdentitas} "${dto.noIdentitasLain}" sudah terdaftar.`,
         );
       }
     }

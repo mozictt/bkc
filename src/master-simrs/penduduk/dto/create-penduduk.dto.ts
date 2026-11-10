@@ -14,22 +14,42 @@ import {
 } from 'class-validator';
 import {
   GolonganDarah,
+  JenisIdentitas,
   JenisKelamin,
   Kewarganegaraan,
   RhesusDarah,
+  StatusHidup,
   StatusPerkawinan,
 } from '../../constants/simrs.enum';
 
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
+// Ubah string kosong "" dari form frontend menjadi undefined agar validasi opsional (@Matches, @IsEmail, @IsDateString) tidak gagal pada kasus bayi/IGD
+const trimOptionalString = ({ value }: { value: unknown }) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
 export class CreatePendudukDto {
+  @ApiPropertyOptional({
+    enum: JenisIdentitas,
+    default: JenisIdentitas.KTP,
+    example: JenisIdentitas.KTP,
+    description: 'Jenis identitas utama penduduk',
+  })
+  @IsOptional()
+  @Transform(trimOptionalString)
+  @IsEnum(JenisIdentitas, { message: 'Jenis identitas tidak valid' })
+  jenisIdentitas?: JenisIdentitas;
+
   @ApiPropertyOptional({
     example: '3273011505900001',
     description: 'Nomor Induk Kependudukan (16 digit angka)',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString({ message: 'NIK harus berupa teks' })
   @Matches(/^\d{16}$/, {
     message: 'NIK harus terdiri dari tepat 16 digit angka',
@@ -37,11 +57,22 @@ export class CreatePendudukDto {
   nik?: string;
 
   @ApiPropertyOptional({
+    example: 'A1234567',
+    description:
+      'Nomor identitas selain NIK (Paspor / KITAS / KITAP / KIA untuk WNA atau anak)',
+  })
+  @IsOptional()
+  @Transform(trimOptionalString)
+  @IsString({ message: 'Nomor identitas lain harus berupa teks' })
+  @MaxLength(50, { message: 'Nomor identitas lain maksimal 50 karakter' })
+  noIdentitasLain?: string;
+
+  @ApiPropertyOptional({
     example: '3273011505900099',
     description: 'Nomor Kartu Keluarga (16 digit angka)',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString({ message: 'No. KK harus berupa teks' })
   @Matches(/^\d{16}$/, {
     message: 'No. KK harus terdiri dari tepat 16 digit angka',
@@ -59,11 +90,21 @@ export class CreatePendudukDto {
   namaLengkap: string;
 
   @ApiPropertyOptional({
+    example: 'Siti Aminah',
+    description: 'Nama ibu kandung untuk verifikasi identitas & MPI SATUSEHAT',
+  })
+  @IsOptional()
+  @Transform(trimOptionalString)
+  @IsString({ message: 'Nama ibu kandung harus berupa teks' })
+  @MaxLength(150, { message: 'Nama ibu kandung maksimal 150 karakter' })
+  namaIbuKandung?: string;
+
+  @ApiPropertyOptional({
     example: 'Bandung',
     description: 'Tempat lahir sesuai KTP',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(100, { message: 'Tempat lahir maksimal 100 karakter' })
   tempatLahir?: string;
@@ -73,6 +114,7 @@ export class CreatePendudukDto {
     description: 'Tanggal lahir format YYYY-MM-DD',
   })
   @IsOptional()
+  @Transform(trimOptionalString)
   @IsDateString(
     {},
     { message: 'Format tanggal lahir tidak valid (gunakan YYYY-MM-DD)' },
@@ -94,6 +136,7 @@ export class CreatePendudukDto {
     description: 'Golongan darah penduduk',
   })
   @IsOptional()
+  @Transform(trimOptionalString)
   @IsEnum(GolonganDarah, { message: 'Golongan darah tidak valid' })
   golonganDarah?: GolonganDarah;
 
@@ -103,6 +146,7 @@ export class CreatePendudukDto {
     description: 'Rhesus darah (+ atau -)',
   })
   @IsOptional()
+  @Transform(trimOptionalString)
   @IsEnum(RhesusDarah, { message: 'Rhesus hanya boleh + atau -' })
   rhesus?: RhesusDarah;
 
@@ -112,6 +156,7 @@ export class CreatePendudukDto {
     description: 'Status perkawinan sesuai KTP',
   })
   @IsOptional()
+  @Transform(trimOptionalString)
   @IsEnum(StatusPerkawinan, { message: 'Status perkawinan tidak valid' })
   statusPerkawinan?: StatusPerkawinan;
 
@@ -122,38 +167,62 @@ export class CreatePendudukDto {
     description: 'Kewarganegaraan penduduk',
   })
   @IsOptional()
+  @Transform(trimOptionalString)
   @IsEnum(Kewarganegaraan, {
     message: 'Kewarganegaraan hanya boleh WNI atau WNA',
   })
   kewarganegaraan?: Kewarganegaraan;
 
   @ApiPropertyOptional({
+    enum: StatusHidup,
+    default: StatusHidup.HIDUP,
+    example: StatusHidup.HIDUP,
+    description: 'Status hidup penduduk (HIDUP / MENINGGAL)',
+  })
+  @IsOptional()
+  @Transform(trimOptionalString)
+  @IsEnum(StatusHidup, { message: 'Status hidup tidak valid' })
+  statusHidup?: StatusHidup;
+
+  @ApiPropertyOptional({
+    example: '2026-10-01',
+    description: 'Tanggal meninggal format YYYY-MM-DD (jika sudah meninggal)',
+  })
+  @IsOptional()
+  @Transform(trimOptionalString)
+  @IsDateString(
+    {},
+    { message: 'Format tanggal meninggal tidak valid (gunakan YYYY-MM-DD)' },
+  )
+  tanggalMeninggal?: string;
+
+  @ApiPropertyOptional({
     example: 'Jl. Asia Afrika No. 10',
     description: 'Alamat lengkap sesuai KTP',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(500, { message: 'Alamat KTP maksimal 500 karakter' })
   alamatKtp?: string;
 
   @ApiPropertyOptional({ example: '001', description: 'Nomor RT' })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(5, { message: 'RT maksimal 5 karakter' })
   rt?: string;
 
   @ApiPropertyOptional({ example: '002', description: 'Nomor RW' })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(5, { message: 'RW maksimal 5 karakter' })
   rw?: string;
 
   @ApiPropertyOptional({ example: '40111', description: 'Kode pos alamat KTP' })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(10, { message: 'Kode pos maksimal 10 karakter' })
   kodePos?: string;
@@ -163,7 +232,7 @@ export class CreatePendudukDto {
     description: 'Nomor telepon/HP aktif',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @Matches(/^[0-9+\-\s]+$/, {
     message: 'Nomor telepon hanya boleh berisi angka, spasi, tanda + atau -',
@@ -176,7 +245,7 @@ export class CreatePendudukDto {
     description: 'Alamat email',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsEmail({}, { message: 'Format email tidak valid' })
   @MaxLength(150, { message: 'Email maksimal 150 karakter' })
   email?: string;
@@ -186,7 +255,7 @@ export class CreatePendudukDto {
     description: 'ID Kelurahan (BPS/Kemendagri, 13 karakter)',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(13, { message: 'ID Kelurahan maksimal 13 karakter' })
   idKelurahan?: string;
@@ -224,7 +293,7 @@ export class CreatePendudukDto {
     description: 'ID IHS Patient dari platform SATUSEHAT Kemenkes',
   })
   @IsOptional()
-  @Transform(trimString)
+  @Transform(trimOptionalString)
   @IsString()
   @MaxLength(50, { message: 'IHS Patient ID maksimal 50 karakter' })
   ihsPatientId?: string;

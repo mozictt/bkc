@@ -38,6 +38,8 @@ export const SUPER_ADMIN_RESOURCES: string[] = [
   'Suku',
   'Penduduk',
   'Dokter',
+  'Penjamin',
+  'Pasien',
 
   // Route-level menu resources
   'menu-album',
@@ -64,6 +66,8 @@ export const SUPER_ADMIN_RESOURCES: string[] = [
   'menu-suku',
   'menu-penduduk',
   'menu-dokter',
+  'menu-penjamin',
+  'menu-pasien',
   'rumah-tangga.dashboard',
   'rumah-tangga.kategori',
   'rumah-tangga.transaksi',
@@ -222,6 +226,20 @@ export const MENU_TREE: MenuSeedItem[] = [
         icon: 'Stethoscope',
         order_no: 7,
         requiredResource: 'menu-dokter',
+      },
+      {
+        name: 'Penjamin',
+        url: '/master/penjamin',
+        icon: 'ShieldCheck',
+        order_no: 8,
+        requiredResource: 'menu-penjamin',
+      },
+      {
+        name: 'Pasien',
+        url: '/master/pasien',
+        icon: 'HeartPulse',
+        order_no: 9,
+        requiredResource: 'menu-pasien',
       },
     ],
   },

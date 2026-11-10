@@ -8,6 +8,10 @@ import { User } from '../entities/user.entity';
 import { Pegawai } from '../entities/pegawai.entity';
 import { Penduduk } from '../entities/penduduk.entity';
 import { Dokter } from '../entities/dokter.entity';
+import { Pasien } from '../entities/pasien.entity';
+import { PasienPenjamin } from '../entities/pasien-penjamin.entity';
+import { Penjamin } from '../entities/penjamin.entity';
+import { TenantCounter } from '../entities/tenant-counter.entity';
 import { Agama } from '../entities/agama.entity';
 import { Pendidikan } from '../entities/pendidikan.entity';
 import { Pekerjaan } from '../entities/pekerjaan.entity';
@@ -38,6 +42,10 @@ const AppDataSource = new DataSource({
     Pegawai,
     Penduduk,
     Dokter,
+    Pasien,
+    PasienPenjamin,
+    Penjamin,
+    TenantCounter,
     Agama,
     Pendidikan,
     Pekerjaan,
