@@ -216,20 +216,7 @@ export const runMenuSeed = async (dataSource: DataSource) => {
 
   // --- 3. SEED PERMISSIONS ---
   const allResources = Array.from(
-    new Set([
-      'Document',
-      'User',
-      'Role',
-      'Menu',
-      'Pegawai',
-      'Permission',
-      'Tenant',
-      'Barang',
-      'Gallery',
-      'CompanyProfile',
-      'WhatsApp',
-      ...Array.from(requiredResourcesSet),
-    ]),
+    new Set([...SUPER_ADMIN_RESOURCES, ...Array.from(requiredResourcesSet)]),
   );
 
   for (const resource of allResources) {
