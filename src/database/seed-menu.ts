@@ -15,6 +15,18 @@ import { TenantCounter } from '../entities/tenant-counter.entity';
 import { Kelas } from '../entities/kelas.entity';
 import { Unit } from '../entities/unit.entity';
 import { Bed } from '../entities/bed.entity';
+import { JadwalDokter } from '../entities/jadwal-dokter.entity';
+import { TarifTindakan } from '../entities/tarif-tindakan.entity';
+import { TarifLayanan } from '../entities/tarif-layanan.entity';
+import { LabParameter } from '../entities/lab-parameter.entity';
+import { LabParameterRujukan } from '../entities/lab-parameter-rujukan.entity';
+import { LabTindakanParameter } from '../entities/lab-tindakan-parameter.entity';
+import { PenunjangLab } from '../entities/penunjang-lab.entity';
+import { PenunjangLabItem } from '../entities/penunjang-lab-item.entity';
+import { PenunjangLabHasil } from '../entities/penunjang-lab-hasil.entity';
+import { Pendaftaran } from '../entities/pendaftaran.entity';
+import { PendaftaranUnitHistory } from '../entities/pendaftaran-unit-history.entity';
+import { PendaftaranPenjamin } from '../entities/pendaftaran-penjamin.entity';
 import { Agama } from '../entities/agama.entity';
 import { Pendidikan } from '../entities/pendidikan.entity';
 import { Pekerjaan } from '../entities/pekerjaan.entity';
@@ -52,6 +64,18 @@ const AppDataSource = new DataSource({
     Kelas,
     Unit,
     Bed,
+    JadwalDokter,
+    TarifTindakan,
+    TarifLayanan,
+    LabParameter,
+    LabParameterRujukan,
+    LabTindakanParameter,
+    PenunjangLab,
+    PenunjangLabItem,
+    PenunjangLabHasil,
+    Pendaftaran,
+    PendaftaranUnitHistory,
+    PendaftaranPenjamin,
     Agama,
     Pendidikan,
     Pekerjaan,

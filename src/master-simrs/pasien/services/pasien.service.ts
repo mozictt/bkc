@@ -26,6 +26,11 @@ import { BaseTenantService } from '@common/tenant/base-tenant.service';
 import { getPostgresErrorCode } from '@common/utils/postgres-error.util';
 import { PendudukService } from '../../penduduk/services/penduduk.service';
 import { FormatNoRm } from '../../constants/simrs.enum';
+import {
+  extractNoRmPatternFromTenantSettings,
+  formatNoRmFromConfig,
+  NO_RM_PRESET_PATTERNS,
+} from '../../../tenants/tenant-settings.config';
 import { CreatePasienDto } from '../dto/create-pasien.dto';
 import { UpdatePasienDto } from '../dto/update-pasien.dto';
 import { QueryPasienDto } from '../dto/query-pasien.dto';
@@ -35,12 +40,9 @@ import {
 } from '../dto/pasien-penjamin.dto';
 
 export function formatNoRmSequence(seq: number, format: FormatNoRm): string {
-  if (format === FormatNoRm.DASH_6) {
-    const raw = String(seq).padStart(6, '0');
-    const evenPadded = raw.length % 2 === 1 ? `0${raw}` : raw;
-    return evenPadded.replace(/(\d{2})(?=\d)/g, '$1-');
-  }
-  return String(seq).padStart(8, '0');
+  const pattern =
+    NO_RM_PRESET_PATTERNS[format] ?? NO_RM_PRESET_PATTERNS[FormatNoRm.PLAIN_8];
+  return formatNoRmFromConfig(seq, pattern);
 }
 
 @Injectable()
@@ -221,93 +223,104 @@ export class PasienService extends BaseTenantService<Pasien> {
   }
 
   async create(dto: CreatePasienDto) {
-    this.validateCreateRelationsInput(dto);
     const tenantId = this.tenantId;
 
     const savedId = await this.dataSource.transaction(async (manager) => {
-      const penduduk = await this.resolvePendudukForCreate(
+      const savedPasien = await this.createInTransaction(
         manager,
         tenantId,
         dto,
       );
-
-      await this.validatePasienBusinessRules(manager, tenantId, {
-        pendudukId: penduduk.id,
-        pendudukIbuId: dto.pendudukIbuId,
-        idKelurahanDomisili: dto.idKelurahanDomisili,
-        noRm: dto.noRm,
-      });
-
-      const noRm = dto.noRm
-        ? dto.noRm
-        : await this.generateNoRmInTransaction(
-            manager,
-            tenantId,
-            dto.formatNoRm,
-          );
-
-      const {
-        penduduk: pendudukPayload,
-        formatNoRm: formatChoice,
-        penjaminList,
-        ...pasienFields
-      } = dto;
-      void pendudukPayload;
-      void formatChoice;
-
-      const pasien = manager.create(Pasien, {
-        ...pasienFields,
-        noRm,
-        pendudukId: penduduk.id,
-        tenantId,
-      });
-
-      const savedPasien = await this.savePasienWithConstraintHandling(
-        manager,
-        pasien,
-      );
-
-      if (penjaminList && penjaminList.length > 0) {
-        const kelasIds = penjaminList
-          .map((item) => item.kelasHakId)
-          .filter((id): id is number => id !== undefined && id !== null);
-
-        const [penjaminMap] = await Promise.all([
-          this.resolveAndValidateMasterMap(
-            manager,
-            Penjamin,
-            tenantId,
-            penjaminList.map((item) => item.penjaminId),
-            'Master Penjamin',
-          ),
-          kelasIds.length > 0
-            ? this.resolveAndValidateMasterMap(
-                manager,
-                Kelas,
-                tenantId,
-                kelasIds,
-                'Master Kelas',
-              )
-            : Promise.resolve(new Map<number, Kelas>()),
-        ]);
-
-        const penjaminEntities = this.buildPenjaminEntities(
-          manager,
-          savedPasien.id,
-          tenantId,
-          penjaminList,
-          penjaminMap,
-        );
-        await this.savePenjaminWithConstraintHandling(
-          manager,
-          penjaminEntities,
-        );
-      }
-
       return savedPasien.id;
     });
 
     return this.findOne(savedId);
+  }
+
+  /**
+   * Helper transaksi untuk membuat master pasien (beserta penduduk & daftar penjamin)
+   * sehingga dapat dipakai ulang secara atomik oleh modul Pendaftaran kunjungan.
+   */
+  async createInTransaction(
+    manager: EntityManager,
+    tenantId: string,
+    dto: CreatePasienDto,
+  ): Promise<Pasien> {
+    this.validateCreateRelationsInput(dto);
+
+    const penduduk = await this.resolvePendudukForCreate(
+      manager,
+      tenantId,
+      dto,
+    );
+
+    await this.validatePasienBusinessRules(manager, tenantId, {
+      pendudukId: penduduk.id,
+      pendudukIbuId: dto.pendudukIbuId,
+      idKelurahanDomisili: dto.idKelurahanDomisili,
+      noRm: dto.noRm,
+    });
+
+    const noRm = dto.noRm
+      ? dto.noRm
+      : await this.generateNoRmInTransaction(manager, tenantId, dto.formatNoRm);
+
+    const {
+      penduduk: pendudukPayload,
+      formatNoRm: formatChoice,
+      penjaminList,
+      ...pasienFields
+    } = dto;
+    void pendudukPayload;
+    void formatChoice;
+
+    const pasien = manager.create(Pasien, {
+      ...pasienFields,
+      noRm,
+      pendudukId: penduduk.id,
+      tenantId,
+    });
+
+    const savedPasien = await this.savePasienWithConstraintHandling(
+      manager,
+      pasien,
+    );
+
+    if (penjaminList && penjaminList.length > 0) {
+      const kelasIds = penjaminList
+        .map((item) => item.kelasHakId)
+        .filter((id): id is number => id !== undefined && id !== null);
+
+      const [penjaminMap] = await Promise.all([
+        this.resolveAndValidateMasterMap(
+          manager,
+          Penjamin,
+          tenantId,
+          penjaminList.map((item) => item.penjaminId),
+          'Master Penjamin',
+        ),
+        kelasIds.length > 0
+          ? this.resolveAndValidateMasterMap(
+              manager,
+              Kelas,
+              tenantId,
+              kelasIds,
+              'Master Kelas',
+            )
+          : Promise.resolve(new Map<number, Kelas>()),
+      ]);
+
+      const penjaminEntities = this.buildPenjaminEntities(
+        manager,
+        savedPasien.id,
+        tenantId,
+        penjaminList,
+        penjaminMap,
+      );
+      await this.savePenjaminWithConstraintHandling(manager, penjaminEntities);
+    }
+
+    return savedPasien;
   }
 
   async update(id: number, dto: UpdatePasienDto) {
@@ -537,25 +550,26 @@ export class PasienService extends BaseTenantService<Pasien> {
 
   /**
    * Generate No. RM atomik per tenant dengan UPSERT counter PostgreSQL (anti race condition).
+   * Pola digit/prefix/blok mengikuti pengaturan `tenants.settings.noRm` bila `requestedFormat` kosong.
    */
   async generateNoRmInTransaction(
     manager: EntityManager,
     tenantId: string,
-    requestedFormat?: FormatNoRm,
+    requestedFormat?: FormatNoRm | string,
   ): Promise<string> {
-    let format = requestedFormat;
-    if (!format) {
+    let rawSettings: Record<string, unknown> | null = null;
+    if (!requestedFormat) {
       const tenant = await manager.findOne(Tenant, {
         where: { id: tenantId },
         select: ['id', 'settings'],
       });
-      const settings = tenant?.settings as Record<string, unknown> | undefined;
-      const configured = settings?.noRmFormat;
-      format =
-        configured === FormatNoRm.DASH_6
-          ? FormatNoRm.DASH_6
-          : FormatNoRm.PLAIN_8;
+      rawSettings = (tenant?.settings as Record<string, unknown> | null) ?? null;
     }
+
+    const pattern = extractNoRmPatternFromTenantSettings(
+      rawSettings,
+      requestedFormat,
+    );
 
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const rawRows: unknown = await manager.query(
@@ -569,7 +583,7 @@ export class PasienService extends BaseTenantService<Pasien> {
       const rows = rawRows as Array<{ last_value: string | number }>;
 
       const seq = Number(rows[0].last_value);
-      const candidate = formatNoRmSequence(seq, format);
+      const candidate = formatNoRmFromConfig(seq, pattern);
       const collision = await manager.findOne(Pasien, {
         where: { noRm: candidate, tenantId },
         select: ['id'],

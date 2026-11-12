@@ -49,6 +49,17 @@ export class QueryDokterDto {
   status?: StatusAktifMaster;
 
   @ApiPropertyOptional({
+    example: 1,
+    description:
+      'Filter dokter yang memiliki jadwal praktik aktif pada ID Unit pelayanan tertentu',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'ID Unit harus berupa angka bulat' })
+  @Min(1, { message: 'ID Unit minimal 1' })
+  unitId?: number;
+
+  @ApiPropertyOptional({
     default: 'id',
     enum: ['id', 'kodeDokter', 'jenisDokter', 'spesialisasi', 'createdAt'],
     description: 'Kolom pengurutan',

@@ -6,6 +6,7 @@ import { PasienPenjamin } from '@entities/pasien-penjamin.entity';
 import { Penjamin } from '@entities/penjamin.entity';
 import { Kelas } from '@entities/kelas.entity';
 import { Penduduk } from '@entities/penduduk.entity';
+import { Tenant } from '@entities/tenant.entity';
 import { PendudukService } from '../../penduduk/services/penduduk.service';
 import {
   FormatNoRm,
@@ -369,5 +370,43 @@ describe('PasienService', () => {
     );
     expect(added?.penjaminId).toBe(2);
     expect(added?.kelasHakId).toBe(2);
+  });
+
+  it('mengikuti pengaturan model No. RM tenant di tenants.settings.noRm (mis. 4 digit) dan preset override saat generate No. RM', async () => {
+    const { service, manager } = createService();
+
+    manager.findOne.mockImplementation((entity: unknown) => {
+      if (entity === Tenant) {
+        return Promise.resolve({
+          id: tenantId,
+          settings: {
+            noRm: {
+              mode: 'CUSTOM',
+              presetKode: 'CUSTOM',
+              jumlahDigit: 4,
+              prefix: 'KL-',
+              suffix: null,
+              panjangBlok: null,
+              pemisahBlok: null,
+            },
+          },
+        });
+      }
+      return Promise.resolve(null);
+    });
+    manager.query.mockResolvedValue([{ last_value: '9' }]);
+
+    const autoDefaultNoRm = await service.generateNoRmInTransaction(
+      manager as never,
+      tenantId,
+    );
+    expect(autoDefaultNoRm).toBe('KL-0009');
+
+    const pickedPresetNoRm = await service.generateNoRmInTransaction(
+      manager as never,
+      tenantId,
+      'PLAIN_4',
+    );
+    expect(pickedPresetNoRm).toBe('0009');
   });
 });

@@ -113,7 +113,58 @@ export enum StatusKetersediaanBed {
   PERBAIKAN = 'PERBAIKAN',
 }
 
+export enum HariPraktik {
+  SENIN = 'SENIN',
+  SELASA = 'SELASA',
+  RABU = 'RABU',
+  KAMIS = 'KAMIS',
+  JUMAT = 'JUMAT',
+  SABTU = 'SABTU',
+  MINGGU = 'MINGGU',
+}
+
+export enum SesiPraktik {
+  PAGI = 'PAGI',
+  SIANG = 'SIANG',
+  SORE = 'SORE',
+  MALAM = 'MALAM',
+}
+
 export enum StatusAktifMaster {
   AKTIF = 'Y',
   NONAKTIF = 'N',
+}
+
+export enum JenisTarif {
+  BIASA = 'BIASA',
+  LABORATORIUM = 'LABORATORIUM',
+  RADIOLOGI = 'RADIOLOGI',
+}
+
+export enum TipeHasilLab {
+  NUMERIC = 'NUMERIC',
+  OPTION = 'OPTION',
+  TEXT = 'TEXT',
+}
+
+export enum JenisKelaminRujukanLab {
+  ALL = 'ALL',
+  LAKI_LAKI = 'L',
+  PEREMPUAN = 'P',
+}
+
+export enum FlagHasilLab {
+  NORMAL = 'NORMAL',
+  LOW = 'LOW',
+  HIGH = 'HIGH',
+  CRITICAL_LOW = 'CRITICAL_LOW',
+  CRITICAL_HIGH = 'CRITICAL_HIGH',
+  ABNORMAL = 'ABNORMAL',
+}
+
+export enum StatusPenunjangLab {
+  DIPROSES = 'DIPROSES',
+  SELESAI_INPUT = 'SELESAI_INPUT',
+  TERVERIFIKASI = 'TERVERIFIKASI',
+  BATAL = 'BATAL',
 }

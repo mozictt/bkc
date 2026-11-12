@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node src/database/seed-runner.ts",
     "seed:menu": "ts-node src/database/seed-menu.ts",
+    "backfill:pendaftaran-penjamin": "ts-node src/database/backfill-pendaftaran-penjamin.ts",
     "migrate:faststart": "node scripts/migrate-video-faststart.js"
   },
   "dependencies": {

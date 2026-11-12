@@ -12,25 +12,15 @@ import { Pegawai } from '@entities/pegawai.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { BaseTenantService } from '@common/tenant/base-tenant.service';
 import { getPostgresErrorCode } from '@common/utils/postgres-error.util';
+import { StatusAktifMaster } from '../../constants/simrs.enum';
+import { formatNamaGelarDokter } from '../../helpers/master-entity.helper';
 import { PegawaiService } from '@src/pegawai/pegawai.service';
 import { PendudukService } from '../../penduduk/services/penduduk.service';
 import { CreateDokterDto } from '../dto/create-dokter.dto';
 import { UpdateDokterDto } from '../dto/update-dokter.dto';
 import { QueryDokterDto } from '../dto/query-dokter.dto';
 
-export function formatNamaGelarDokter(
-  gelarDepan?: string | null,
-  namaLengkap?: string | null,
-  gelarBelakang?: string | null,
-): string {
-  const namaUtama = [gelarDepan?.trim(), namaLengkap?.trim()]
-    .filter(Boolean)
-    .join(' ');
-  if (!namaUtama) return '';
-  return gelarBelakang?.trim()
-    ? `${namaUtama}, ${gelarBelakang.trim()}`
-    : namaUtama;
-}
+export { formatNamaGelarDokter };
 
 @Injectable()
 export class DokterService extends BaseTenantService<Dokter> {
@@ -57,6 +47,7 @@ export class DokterService extends BaseTenantService<Dokter> {
       jenisDokter,
       spesialisasi,
       status,
+      unitId,
       sortBy = 'id',
       sortType = 'DESC',
     } = queryDto;
@@ -115,6 +106,24 @@ export class DokterService extends BaseTenantService<Dokter> {
 
     if (status) {
       qb.andWhere('dokter.status = :status', { status });
+    }
+
+    if (unitId) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT jd.id
+          FROM jadwal_dokter jd
+          WHERE jd.dokter_id = dokter.id
+            AND jd.tenant_id = :jadwalTenantId
+            AND jd.unit_id = :unitId
+            AND jd.status = :jadwalAktif
+        )`,
+        {
+          jadwalTenantId: this.tenantId,
+          unitId,
+          jadwalAktif: StatusAktifMaster.AKTIF,
+        },
+      );
     }
 
     const allowedSort = [

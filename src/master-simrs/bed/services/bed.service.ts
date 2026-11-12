@@ -3,15 +3,18 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { Bed } from '@entities/bed.entity';
 import { Unit } from '@entities/unit.entity';
 import { Kelas } from '@entities/kelas.entity';
+import { Pendaftaran } from '@entities/pendaftaran.entity';
 import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { BaseTenantService } from '@common/tenant/base-tenant.service';
 import { StatusKetersediaanBed } from '../../constants/simrs.enum';
+import { ACTIVE_KUNJUNGAN_STATUSES } from '@src/transaksi/pendaftaran/constants/pendaftaran.enum';
 import {
   assertActiveMasterRecord,
   assertUniqueTenantFields,
@@ -50,6 +53,9 @@ export class BedService extends BaseTenantService<Bed> {
     @InjectRepository(Kelas)
     private readonly kelasRepo: Repository<Kelas>,
     tenantService: TenantContextService,
+    @Optional()
+    @InjectRepository(Pendaftaran)
+    private readonly pendaftaranRepo?: Repository<Pendaftaran>,
   ) {
     super(repo, tenantService, 'bed');
   }
@@ -333,6 +339,26 @@ export class BedService extends BaseTenantService<Bed> {
     dto: UpdateStatusKetersediaanBedDto,
   ): Promise<Bed> {
     const existing = await this.findOne(id);
+    if (
+      existing.statusKetersediaan === String(StatusKetersediaanBed.TERISI) &&
+      dto.statusKetersediaan !== StatusKetersediaanBed.TERISI &&
+      this.pendaftaranRepo
+    ) {
+      const occupiedBy = await this.pendaftaranRepo.findOne({
+        where: {
+          tenantId: this.tenantId,
+          bedSaatIniId: id,
+          statusKunjungan: In([...ACTIVE_KUNJUNGAN_STATUSES]),
+        },
+        select: ['id', 'noRegistrasi'],
+      });
+      if (occupiedBy) {
+        throw new ConflictException(
+          `Bed "${existing.kode}" sedang ditempati oleh kunjungan aktif (${occupiedBy.noRegistrasi}). Gunakan mutasi bed, batal ranap, atau pulangkan pasien terlebih dahulu.`,
+        );
+      }
+    }
+
     existing.statusKetersediaan = dto.statusKetersediaan;
     if (dto.keterangan !== undefined) {
       existing.keterangan = dto.keterangan;

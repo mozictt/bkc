@@ -29,11 +29,20 @@ async function upsertMenuTree(
   parentId: number | null = null,
 ): Promise<void> {
   for (const item of menus) {
-    // Cek apakah menu sudah ada berdasarkan name + tenant_id
-    const existing = await queryRunner.query(
-      `SELECT id FROM menus WHERE name = $1 AND tenant_id = $2 LIMIT 1`,
-      [item.name, tenantId],
-    );
+    // Cek apakah menu sudah ada berdasarkan required_resource (prioritas) atau name + parent_id + tenant_id
+    let existing: Array<{ id: number }> = [];
+    if (item.requiredResource) {
+      existing = await queryRunner.query(
+        `SELECT id FROM menus WHERE required_resource = $1 AND tenant_id = $2 LIMIT 1`,
+        [item.requiredResource, tenantId],
+      );
+    }
+    if (existing.length === 0) {
+      existing = await queryRunner.query(
+        `SELECT id FROM menus WHERE name = $1 AND parent_id IS NOT DISTINCT FROM $2 AND tenant_id = $3 LIMIT 1`,
+        [item.name, parentId, tenantId],
+      );
+    }
 
     let menuId: number;
 

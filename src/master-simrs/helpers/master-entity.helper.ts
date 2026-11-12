@@ -18,6 +18,23 @@ export const trimOptionalString = ({ value }: { value: unknown }) => {
 };
 
 /**
+ * Memformat nama lengkap dokter beserta gelar depan dan gelar belakang.
+ */
+export function formatNamaGelarDokter(
+  gelarDepan?: string | null,
+  namaLengkap?: string | null,
+  gelarBelakang?: string | null,
+): string {
+  const namaUtama = [gelarDepan?.trim(), namaLengkap?.trim()]
+    .filter(Boolean)
+    .join(' ');
+  if (!namaUtama) return '';
+  return gelarBelakang?.trim()
+    ? `${namaUtama}, ${gelarBelakang.trim()}`
+    : namaUtama;
+}
+
+/**
  * Memastikan sekumpulan field unik (seperti kode, nama) belum dipakai pada tenant yang sama.
  */
 export async function assertUniqueTenantFields<

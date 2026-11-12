@@ -11,6 +11,7 @@ import { PegawaiService } from '@src/pegawai/pegawai.service';
 import { PermissionGuard } from '@src/permissions/guards/permission.guard';
 import { JwtAuthGuard } from '@auth/jwt-auth.guard';
 import { CreateDokterDto } from './dto/create-dokter.dto';
+import { QueryDokterDto } from './dto/query-dokter.dto';
 import { CreatePendudukDto } from '../penduduk/dto/create-penduduk.dto';
 
 describe('Swagger OpenAPI & Validasi DTO Master Dokter / Penduduk / Pegawai', () => {
@@ -96,5 +97,15 @@ describe('Swagger OpenAPI & Validasi DTO Master Dokter / Penduduk / Pegawai', ()
     expect(validDokter.kodeDokter).toBe('DOK-010');
     expect(validDokter.penduduk?.namaLengkap).toBe('Siti Aminah');
     expect(validDokter.pegawai?.nip).toBe('PEG-010');
+
+    const queryDokter = (await pipe.transform(
+      { unitId: '2', status: 'Y' },
+      { type: 'query', metatype: QueryDokterDto },
+    )) as QueryDokterDto;
+    expect(queryDokter.unitId).toBe(2);
+
+    await expect(
+      pipe.transform({ unitId: '0' }, { type: 'query', metatype: QueryDokterDto }),
+    ).rejects.toThrow();
   });
 });

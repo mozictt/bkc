@@ -26,6 +26,8 @@ import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RumahTanggaModule } from './rumah-tangga/rumah-tangga.module';
 import { MasterSimrsModule } from './master-simrs/master-simrs.module';
+import { PendaftaranModule } from './transaksi/pendaftaran/pendaftaran.module';
+import { PenunjangLabModule } from './transaksi/penunjang-lab/penunjang-lab.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import * as dotenv from 'dotenv';
@@ -81,6 +83,8 @@ const importsList: any[] = [
   NotificationsModule,
   RumahTanggaModule,
   MasterSimrsModule,
+  PendaftaranModule,
+  PenunjangLabModule,
 ];
 
 // Deklarasikan MockRedisModule secara Global jika Redis dinonaktifkan

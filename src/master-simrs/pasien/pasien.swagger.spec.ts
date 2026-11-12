@@ -57,6 +57,9 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
     expect(schemas.CreatePasienDto).toBeDefined();
     expect(schemas.UpdatePasienDto).toBeDefined();
     expect(
+      schemas.CreatePasienDto?.properties?.formatNoRm,
+    ).toBeDefined();
+    expect(
       schemas.CreatePasienPenjaminItemDto?.properties?.kelasHakId,
     ).toBeDefined();
     expect(schemas.UpdatePasienPenjaminItemDto).toBeDefined();
@@ -64,7 +67,7 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
     await app.close();
   });
 
-  it('menormalisasi string kosong nik & kelasHakId serta memvalidasi nested penjaminList', async () => {
+  it('menormalisasi string kosong nik & kelasHakId serta memvalidasi nested penjaminList & formatNoRm', async () => {
     const pipe = new ValidationPipe({
       whitelist: true,
       transform: true,
@@ -72,6 +75,7 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
 
     const validBaby = (await pipe.transform(
       {
+        formatNoRm: ' plain_4 ',
         isBayiBaruLahir: true,
         penduduk: {
           nik: '   ',
@@ -95,6 +99,7 @@ describe('Swagger OpenAPI & Validasi DTO Master Pasien + Master Penjamin', () =>
       { type: 'body', metatype: CreatePasienDto },
     )) as CreatePasienDto;
 
+    expect(validBaby.formatNoRm).toBe('PLAIN_4');
     expect(validBaby.penduduk?.nik).toBeUndefined();
     expect(validBaby.penduduk?.namaLengkap).toBe('By. Ny. Ani');
     expect(validBaby.penjaminList?.[0].penjaminId).toBe(1);

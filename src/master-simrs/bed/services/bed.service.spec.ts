@@ -4,6 +4,7 @@ import { TenantContextService } from '@common/tenant/tenant-context.service';
 import { Bed } from '@entities/bed.entity';
 import { Unit } from '@entities/unit.entity';
 import { Kelas } from '@entities/kelas.entity';
+import { Pendaftaran } from '@entities/pendaftaran.entity';
 import { StatusKetersediaanBed } from '../../constants/simrs.enum';
 import { BedService } from './bed.service';
 
@@ -152,5 +153,38 @@ describe('BedService', () => {
         keterangan: 'Sterilisasi kamar',
       }),
     );
+  });
+
+  it('menolak pengubahan status bed TERISI secara manual jika masih ditempati kunjungan aktif', async () => {
+    const { repo, unitRepo, kelasRepo, detailQb } = createService();
+    detailQb.getOne.mockResolvedValue({
+      id: 50,
+      kode: 'MLT-101-01',
+      nama: 'Bed 01',
+      unitId: 10,
+      kelasId: 1,
+      statusKetersediaan: StatusKetersediaanBed.TERISI,
+    });
+    const pendaftaranRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 901,
+        noRegistrasi: 'REG-20261111-0001',
+      }),
+    };
+    const tenantService = { getTenantId: jest.fn(() => tenantId) };
+
+    const guardedService = new BedService(
+      repo as unknown as Repository<Bed>,
+      unitRepo as unknown as Repository<Unit>,
+      kelasRepo as unknown as Repository<Kelas>,
+      tenantService as unknown as TenantContextService,
+      pendaftaranRepo as unknown as Repository<Pendaftaran>,
+    );
+
+    await expect(
+      guardedService.updateStatusKetersediaan(50, {
+        statusKetersediaan: StatusKetersediaanBed.KOSONG,
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 });

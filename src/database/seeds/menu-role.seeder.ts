@@ -64,13 +64,14 @@ async function upsertMenuTree(
     }
 
     if (!menu) {
+      const parentWhere = parent ? { id: parent.id } : IsNull();
       menu = await menuRepo.findOne({
         where: masterTenantId
           ? [
-              { name: item.name, tenantId: masterTenantId },
-              { name: item.name, tenantId: IsNull() },
+              { name: item.name, parent: parentWhere, tenantId: masterTenantId },
+              { name: item.name, parent: parentWhere, tenantId: IsNull() },
             ]
-          : { name: item.name, tenantId: IsNull() },
+          : { name: item.name, parent: parentWhere, tenantId: IsNull() },
         relations: ['parent'],
       });
     }

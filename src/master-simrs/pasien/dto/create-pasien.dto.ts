@@ -39,16 +39,21 @@ export class CreatePasienDto {
   noRm?: string;
 
   @ApiPropertyOptional({
-    enum: FormatNoRm,
     example: FormatNoRm.PLAIN_8,
     description:
-      'Format auto-generate No. RM (PLAIN_8 = 00000001, DASH_6 = 00-00-01). Mengikuti pengaturan tenant jika dikosongkan.',
+      'Override format auto-generate No. RM (PLAIN_8, DASH_6, atau PLAIN_4). Mengikuti pengaturan tenant di Halaman Setting jika dikosongkan.',
   })
   @IsOptional()
-  @IsEnum(FormatNoRm, {
-    message: 'Format No. RM hanya boleh PLAIN_8 atau DASH_6',
-  })
-  formatNoRm?: FormatNoRm;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim() === ''
+      ? undefined
+      : typeof value === 'string'
+        ? value.trim().toUpperCase()
+        : value,
+  )
+  @IsString({ message: 'Format No. RM harus berupa teks kode format' })
+  @MaxLength(30, { message: 'Kode Format No. RM maksimal 30 karakter' })
+  formatNoRm?: string;
 
   @ApiPropertyOptional({
     example: 1,

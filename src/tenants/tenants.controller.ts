@@ -54,17 +54,6 @@ export class TenantsController {
     return this.tenantsService.updateTenant(id, dto);
   }
 
-  @Patch(':id/settings')
-  @UseGuards(MasterTenantGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Memperbarui konfigurasi/setting tenant anak (Khusus Master Tenant)' })
-  async updateSettings(
-    @Param('id') id: string,
-    @Body() settings: Record<string, any>,
-  ) {
-    return this.tenantsService.updateSettings(id, settings);
-  }
-
   @Patch(':id/toggle-master')
   @UseGuards(MasterTenantGuard)
   @ApiBearerAuth()

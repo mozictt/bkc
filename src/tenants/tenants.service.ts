@@ -4,6 +4,7 @@ import { Repository, IsNull } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { Tenant } from '../entities/tenant.entity';
+import { TenantSettingsService } from './tenant-settings.service';
 import { Role } from '../role/entities/role.entity';
 import { Menu } from '../entities/menu.entity';
 import { Permission } from '../entities/permission.entity';
@@ -19,6 +20,7 @@ export class TenantsService {
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
     @InjectRedis() private readonly redis: Redis,
+    private readonly tenantSettingsService: TenantSettingsService,
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
@@ -81,9 +83,7 @@ export class TenantsService {
   }
 
   async updateSettings(id: string, settings: Record<string, any>) {
-    const tenant = await this.findOne(id);
-    tenant.settings = { ...(tenant.settings || {}), ...settings };
-    return await this.tenantRepo.save(tenant);
+    return this.tenantSettingsService.updateSettings(id, settings);
   }
 
   async toggleMaster(id: string) {

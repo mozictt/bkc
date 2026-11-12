@@ -6,7 +6,11 @@ import { Pegawai } from '@entities/pegawai.entity';
 import { Penduduk } from '@entities/penduduk.entity';
 import { PegawaiService } from '@src/pegawai/pegawai.service';
 import { PendudukService } from '../../penduduk/services/penduduk.service';
-import { JenisDokter, JenisKelamin } from '../../constants/simrs.enum';
+import {
+  JenisDokter,
+  JenisKelamin,
+  StatusAktifMaster,
+} from '../../constants/simrs.enum';
 import { DokterService, formatNamaGelarDokter } from './dokter.service';
 
 describe('DokterService', () => {
@@ -26,9 +30,15 @@ describe('DokterService', () => {
     };
 
     const detailQb = {
+      leftJoin: jest.fn().mockReturnThis(),
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       getOne: jest.fn().mockResolvedValue({
         id: 99,
         kodeDokter: 'DOK-001',
@@ -224,5 +234,23 @@ describe('DokterService', () => {
         pendudukId: 10,
       }),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('memfilter daftar dokter berdasarkan unitId jadwal praktik aktif saat parameter unitId dikirim', async () => {
+    const { service, detailQb } = createService();
+
+    await service.findAll({
+      unitId: 2,
+      status: StatusAktifMaster.AKTIF,
+    });
+
+    expect(detailQb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('FROM jadwal_dokter jd'),
+      expect.objectContaining({
+        jadwalTenantId: tenantId,
+        unitId: 2,
+        jadwalAktif: StatusAktifMaster.AKTIF,
+      }),
+    );
   });
 });
